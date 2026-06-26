@@ -1,5 +1,12 @@
 {
   "projects": {
     "default": "stevechristianmba-portfolio"
+  },
+  "targets": {
+    "stevechristianmba-portfolio": {
+      "hosting": {
+        "jobs": ["stevechristianmba-jobs"]
+      }
+    }
   }
 }
