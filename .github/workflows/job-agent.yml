@@ -1,0 +1,73 @@
+name: Job Agent — Daily Run
+
+on:
+  schedule:
+    # 6:30 AM Mountain Time = 12:30 PM UTC (MST) / 1:30 PM UTC (MDT)
+    # Using 12:30 UTC which covers MST; adjust to 13:30 in summer if needed
+    - cron: '30 12 * * *'
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  run-job-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Check out repo ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ──────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 3. Restore output cache (scored_jobs, crm) ────────────────────
+      - name: Restore output cache
+        uses: actions/cache@v4
+        with:
+          path: output/
+          key: job-agent-output-${{ github.run_id }}
+          restore-keys: |
+            job-agent-output-
+
+      - name: Ensure output directory exists
+        run: mkdir -p output public
+
+      # ── 4. Write secrets to disk ──────────────────────────────────────
+      - name: Decode Google credentials
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > config/google_credentials.json
+
+      - name: Decode Google OAuth token
+        run: |
+          echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
+
+      # ── 5. Run the agent ──────────────────────────────────────────────
+      - name: Run Job Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python main.py --headless
+
+      # ── 6. Deploy dashboard to Firebase Hosting ───────────────────────
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      # ── 7. Upload logs as artifact (viewable in GitHub Actions UI) ─────
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-agent-logs-${{ github.run_id }}
+          path: output/job_agent.log
+          retention-days: 14

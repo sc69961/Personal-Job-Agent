@@ -1,0 +1,22 @@
+# ── Secrets — NEVER commit these ──────────────────────────────────────────
+config/google_credentials.json
+config/google_token.pickle
+
+# ── Runtime output (large, regenerated each run) ──────────────────────────
+output/
+!output/.gitkeep
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.egg
+
+# ── macOS ─────────────────────────────────────────────────────────────────
+.DS_Store
+
+# ── Firebase ──────────────────────────────────────────────────────────────
+.firebase/
+config/config.py
