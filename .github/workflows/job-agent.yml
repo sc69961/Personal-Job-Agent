@@ -8,6 +8,12 @@ on:
   workflow_dispatch:  # allows manual trigger from GitHub UI
 
 jobs:
+  - name: Debug file structure
+        run: |
+          echo "Working directory: $(pwd)"
+          ls -la config/
+          python -c "import sys; sys.path.insert(0, '.'); from config.config import ANTHROPIC_API_KEY; print('config import OK')"
+
   run-job-agent:
     runs-on: ubuntu-latest
     timeout-minutes: 30
