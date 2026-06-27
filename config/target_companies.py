@@ -37,6 +37,15 @@ CLIMATETECH_COMPANIES = [
     "SPAN", "Enode", "Omnidian", "Aurora Solar", "Enverus",
     "Palmetto", "Powerflex", "Copper Labs", "GridPoint", "WattBuy",
     "Electrify America", "OhmConnect", "Enbala", "AutoGrid",
+
+    # Energy Trading
+    "NextEra Energy", "LevelTen Energy", "Pexapark", "Power Ledger",
+
+    # Energy Software Platforms
+    "AspenTech", "Hitachi Energy", "Siemens Grid Software",
+
+    # Building Electrification
+    "Dandelion Energy", "BlocPower", "Quilt",
 ]
 
 # Tier 2: Fintech / AI / high-growth startups (weight: 1.0x)
@@ -54,6 +63,12 @@ FINTECH_AI_COMPANIES = [
     # High-growth startups (Denver/remote-friendly)
     "Guild Education", "Ibotta", "Ping Identity", "JumpCloud", "SambaSafety",
     "Conga", "Vertafore", "DISH Network", "Dish Wireless", "Boom Supersonic",
+
+    # Industrial AI
+    "Samsara", "Augury", "Sight Machine",
+
+    # Infrastructure Software
+    "Sitetracker", "Procore", "ServiceTitan",
 ]
 
 # All company names flattened (used for matching)
@@ -140,6 +155,39 @@ COMPANY_CAREER_URLS = {
     "OhmConnect":           "https://www.ohmconnect.com/careers",     # Demand response
     "Enbala":               "https://www.enbala.com/careers",         # DER mgmt (Cummins/Accelera)
     "AutoGrid":             "https://www.auto-grid.com/careers/",     # AI for energy flexibility
+
+    # --- Energy Trading ---
+    "NextEra Energy":       "https://jobs.nexteraenergy.com/",
+    "LevelTen Energy":      "https://job-boards.greenhouse.io/leveltenenergy",
+    "Pexapark":             "https://jobs.pexapark.com/jobs",
+    "Power Ledger":         "https://powerledger.io/careers/",
+
+    # --- Energy Software Platforms ---
+    "GE Vernova":           "https://gevernova.wd5.myworkdayjobs.com/Vernova_ExternalSite",
+    "AspenTech":            "https://aspentech.wd5.myworkdayjobs.com/AspenTech",
+    "Hitachi Energy":       "https://careers.hitachi.com/search/hitachi-energy/jobs",
+    "Siemens Grid Software": "https://jobs.siemens-energy.com/en_US/jobs/Jobs/Grid%20technologies?listFilterMode=1",
+
+    # --- Building Electrification ---
+    "Dandelion Energy":     "https://job-boards.greenhouse.io/dandelionenergy",
+    "BlocPower":            "https://job-boards.greenhouse.io/blocpower",
+    "Quilt":                "https://job-boards.greenhouse.io/quilt",
+
+    # --- Industrial AI ---
+    "Samsara":              "https://boards.greenhouse.io/samsara",
+    "Augury":               "https://job-boards.greenhouse.io/augury",
+    "Sight Machine":        "https://ats.rippling.com/sightmachine/jobs",
+
+    # --- Infrastructure Software ---
+    "Sitetracker":          "https://www.sitetracker.com/company/careers/",
+    "Procore":              "https://procore.wd12.myworkdayjobs.com/Procore_External_Careers",
+    "ServiceTitan":         "https://servicetitan.wd1.myworkdayjobs.com/ServiceTitan",
+
+    # --- Fintech Infrastructure ---
+    "Stripe":               "https://stripe.com/jobs/search",
+    "Plaid":                "https://jobs.lever.co/plaid",
+    "Marqeta":              "https://www.marqeta.com/company/careers",
+    "Modern Treasury":      "https://www.moderntreasury.com/about#careers",
 }
 
 def get_company_tier(company_name: str) -> str:
