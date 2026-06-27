@@ -65,11 +65,12 @@ def pre_filter(job: dict, config: dict) -> tuple:
 
 
 CONDENSED_RESUME = """
-Steve Christian | Senior PM | Denver, CO
+Steve Christian | Senior PM | Denver, CO (remote or Denver hybrid only)
 10+ years: DER orchestration, VPPs, demand response, grid-edge optimization, fintech payments platforms.
-Verizon (2020-2025): Incubated 5 x 0→1 products, secured $6M funding. Led AI-driven DER platform (VPP/demand response). Patent: energy usage optimization. Python/SQL analytics.
+Verizon (2020-2025): Incubated 5 x 0->1 products, secured $6M funding. Led AI-driven DER platform (VPP/demand response). Patent: energy usage optimization. Python/SQL analytics.
 Accenture (2017-2020): Airbnb payments platform ($10B+ annual volume, pre-IPO). Disney Parks PM (1M+ app downloads, 30K Cast Member workforce platform).
 Skills: DER/DERMS/VPP/V2G, APIs (REST/GraphQL), SQL, Python, AI/ML, Agile/SAFe.
+Strengths: Platform/API products, 0->1 incubation, growth/monetization. Not interested in ops/process PM, healthcare, pharma, telecom, or mining roles.
 MBA + dual BS (Info Systems, Psychology) — Appalachian State.
 """.strip()
 
@@ -102,6 +103,9 @@ Description:
 - Startup/smaller company preference: +5 pts if startup signals (Series A/B, small team, early stage).
 - Candidate strengths to match: DER/VPP platform experience, 0→1 product, fintech payments ($10B volume), cross-functional leadership, Python/SQL analytics, energy patent.
 - Penalty keywords: {', '.join(criteria['negative_keywords'])}. Each match -10 pts.
+- Role type bonus: Platform/API products +8 pts. 0->1 / new product incubation +8 pts. Growth/monetization +5 pts. Ops-only/process PM roles -10 pts.
+- Industry penalty: Healthcare, medtech, pharma, telecom, mining = automatic -20 pts (candidate explicitly excludes these).
+- Company stage: No preference — score on role quality, not stage.
 
 === YOUR TASK ===
 Return ONLY valid JSON (no markdown, no explanation outside the JSON):
