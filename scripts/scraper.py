@@ -58,69 +58,117 @@ def make_job(
 
 CLIMATEBASE_JOBS_URL = "https://climatebase.org/api/jobs/"
 
+def _parse_climatebase_results(results: list, max_jobs: int) -> list[dict]:
+    """Parse raw Climatebase API results into normalized job dicts."""
+    jobs = []
+    for item in results[:max_jobs]:
+        title    = item.get("title", "")
+        company  = item.get("company_name", item.get("company", {}).get("name", ""))
+        location = item.get("location", "Remote")
+        url      = item.get("url") or item.get("apply_url") or item.get("job_url", "")
+        desc     = item.get("description") or item.get("short_description", "")
+        salary   = item.get("salary") or item.get("compensation", "")
+        posted   = item.get("posted_at", "")[:10] if item.get("posted_at") else ""
+        if not (title and company):
+            continue
+        jobs.append(make_job(
+            title=title, company=company, location=location,
+            url=url, description=desc, source="climatebase",
+            salary_text=str(salary), posted_date=posted,
+        ))
+    return jobs
+
+
+def _scrape_climatebase_playwright(max_jobs: int = 50) -> list[dict]:
+    """
+    Playwright fallback for Climatebase — launches a real browser,
+    waits for the jobs API response, and parses it.
+    """
+    from playwright.sync_api import sync_playwright
+    jobs = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        )
+        page = context.new_page()
+
+        try:
+            # Navigate and explicitly wait for the API response
+            with page.expect_response(
+                lambda r: "/api/jobs" in r.url and r.status == 200,
+                timeout=20000
+            ) as response_info:
+                page.goto("https://climatebase.org/jobs?job_type=full-time", timeout=30000)
+
+            api_response = response_info.value
+            data = api_response.json()
+            results = data.get("results", [])
+            jobs = _parse_climatebase_results(results, max_jobs)
+            logger.info(f"Climatebase (Playwright): fetched {len(jobs)} jobs")
+
+        except Exception as e:
+            logger.warning(f"Climatebase Playwright response wait failed: {e}")
+            # Last resort: scrape visible job cards from the rendered HTML
+            try:
+                page.wait_for_selector(".job-card, [data-testid='job-card'], article", timeout=10000)
+                html = page.content()
+                soup = BeautifulSoup(html, "lxml")
+                cards = soup.select(".job-card, [data-testid='job-card'], article")
+                for card in cards[:max_jobs]:
+                    title   = card.get_text(" ", strip=True)[:80]
+                    link    = card.find("a")
+                    url     = "https://climatebase.org" + link["href"] if link and link.get("href", "").startswith("/") else (link["href"] if link else "")
+                    if title and url:
+                        jobs.append(make_job(title=title, company="", location="", url=url, description="", source="climatebase"))
+                if jobs:
+                    logger.info(f"Climatebase (HTML fallback): found {len(jobs)} cards")
+            except Exception as e2:
+                logger.error(f"Climatebase HTML fallback failed: {e2}")
+        finally:
+            browser.close()
+
+    return jobs
+
+
 def scrape_climatebase(max_jobs: int = 50) -> list[dict]:
     """
-    Pull jobs from Climatebase's public API.
-    Uses a session to pick up cookies from the homepage first,
-    which avoids the 403 that hits direct API calls.
+    Pull jobs from Climatebase. Tries the direct API first;
+    falls back to Playwright browser rendering if blocked.
     """
-    jobs = []
-    params = {
-        "page_size": min(max_jobs, 100),
-        "ordering":  "-posted_at",
-        "job_type":  "full-time",
-    }
+    params = {"page_size": min(max_jobs, 100), "ordering": "-posted_at", "job_type": "full-time"}
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
         "Referer": "https://climatebase.org/jobs",
     }
 
     try:
-        # Use a session so cookies from the homepage carry into the API call
         session = requests.Session()
         session.headers.update(headers)
-        session.get("https://climatebase.org/jobs", timeout=15)  # seed cookies
+        session.get("https://climatebase.org/jobs", timeout=15)
         time.sleep(1)
         resp = session.get(CLIMATEBASE_JOBS_URL, params=params, timeout=20)
         resp.raise_for_status()
-        data = resp.json()
-        results = data.get("results", [])
-
-        for item in results[:max_jobs]:
-            title    = item.get("title", "")
-            company  = item.get("company_name", item.get("company", {}).get("name", ""))
-            location = item.get("location", "Remote")
-            url      = item.get("url") or item.get("apply_url") or item.get("job_url", "")
-            desc     = item.get("description") or item.get("short_description", "")
-            salary   = item.get("salary") or item.get("compensation", "")
-            posted   = item.get("posted_at", "")[:10] if item.get("posted_at") else ""
-
-            if not (title and company):
-                continue
-
-            jobs.append(make_job(
-                title=title, company=company, location=location,
-                url=url, description=desc, source="climatebase",
-                salary_text=str(salary), posted_date=posted,
-            ))
-
+        results = resp.json().get("results", [])
+        jobs = _parse_climatebase_results(results, max_jobs)
         logger.info(f"Climatebase: fetched {len(jobs)} jobs")
-
+        return jobs
     except Exception as e:
-        logger.error(f"Climatebase scrape failed: {e}")
+        logger.warning(f"Climatebase direct API blocked ({e}) — trying Playwright...")
 
-    return jobs
+    try:
+        return _scrape_climatebase_playwright(max_jobs)
+    except Exception as e:
+        logger.debug(f"Climatebase Playwright fallback failed: {e}")
+
+    logger.info("Climatebase: all methods blocked — skipping (LinkedIn covers most of the same listings)")
+    return []
 
 
 # ---------------------------------------------------------------------------
