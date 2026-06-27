@@ -31,13 +31,18 @@ def job_card_html(job: dict, rank: int) -> str:
     badge = score_badge_html(job.get("score", 0), job.get("apply_recommendation", "maybe"))
     strengths = job.get("top_strengths", [])
     gaps = job.get("top_gaps", [])
+    reasons = job.get("top_reasons", [])
     url = job.get("url", "#")
     company_tier = job.get("company_tier", "")
     tier_label = {"climatetech": "⚡ Climate/Energy", "fintech_ai": "🤖 Fintech/AI", "other": "🏢 Other"}.get(company_tier, "")
     target = " ✅ Target Co" if job.get("is_target_company") else ""
 
+    confidence = job.get("confidence", 50)
+    conf_color = "#1a7a3a" if confidence >= 80 else ("#7a5a1a" if confidence >= 55 else "#7a1a1a")
+
     strengths_html = "".join(f"<li>{s}</li>" for s in strengths)
     gaps_html = "".join(f"<li style='color:#888'>{g}</li>" for g in gaps) if gaps else ""
+    reasons_html = "".join(f"<li>{r}</li>" for r in reasons) if reasons else ""
 
     return f"""
     <div style="border:1px solid #ddd;border-radius:8px;padding:18px;margin-bottom:16px;background:#fff;">
@@ -52,8 +57,10 @@ def job_card_html(job: dict, rank: int) -> str:
         <strong>{job.get('company','')}</strong> &nbsp;·&nbsp; {job.get('location','')}
         &nbsp;&nbsp;<span style="color:#888;font-size:12px;">{tier_label}{target}</span>
       </div>
+      <div style="font-size:12px;color:{conf_color};margin-bottom:6px;">🎯 {confidence}% confidence in this score</div>
       {f'<div style="color:#888;font-size:12px;margin-bottom:8px;">Salary: {job["salary_text"]}</div>' if job.get("salary_text") else ''}
       <p style="font-size:14px;color:#333;margin:8px 0 10px;">{job.get('match_summary','')}</p>
+      {"<div style='font-size:12px;color:#888;margin-bottom:6px;'><strong style='color:#6b5e8a;'>📋 Why this score:</strong><ul style='margin:4px 0;padding-left:18px;'>" + reasons_html + "</ul></div>" if reasons else ""}
       {"<ul style='font-size:13px;margin:4px 0;padding-left:18px;color:#1a7a3a;'>" + strengths_html + "</ul>" if strengths else ""}
       {"<ul style='font-size:13px;margin:4px 0;padding-left:18px;'>" + gaps_html + "</ul>" if gaps else ""}
       <div style="margin-top:12px;display:flex;gap:10px;">

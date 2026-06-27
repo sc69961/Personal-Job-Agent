@@ -47,10 +47,24 @@ PREFERRED_TITLES = [
 
 # Keywords that signal a strong fit for your background
 HIGH_SIGNAL_KEYWORDS = [
+    # Energy / climate (strongest match)
     "DER", "DERMS", "VPP", "virtual power plant", "demand response",
     "distributed energy", "grid", "energy", "utilities", "IoT",
-    "platform", "API", "0 to 1", "zero to one", "fintech", "payments",
-    "AI", "machine learning", "startup", "Series A", "Series B",
+    "HEMS", "home energy", "grid edge", "grid modernization", "climate tech",
+    "energy management", "energy markets",
+    # Platform / AI (strong match)
+    "platform", "API", "SaaS", "AI", "machine learning", "LLM",
+    "data platform", "predictive analytics", "automation", "AI-first",
+    "enterprise platform", "microservices",
+    # Role signals (strong match)
+    "0 to 1", "zero to one", "0->1", "incubation", "new venture",
+    "product-led", "product strategy", "strategic ownership",
+    "experimentation", "hypothesis", "product discovery",
+    # Fintech (moderate match)
+    "fintech", "payments", "financial platform", "transaction",
+    # Company signals
+    "startup", "Series A", "Series B", "Series C", "growth stage",
+    "innovation", "emerging technology",
 ]
 
 # Keywords that signal poor fit — auto-downweight
@@ -63,8 +77,11 @@ NEGATIVE_KEYWORDS = [
     # Industry rule-outs (explicit)
     "healthcare", "medical device", "pharma", "pharmaceutical",
     "telecom", "telecommunications", "mining", "medtech", "clinical",
-    # Role type mismatches
+    # Role type mismatches — no strategic ownership
     "operations analyst", "program coordinator", "process manager",
+    "project manager", "program manager", "scrum master",
+    "backlog management", "delivery manager", "release manager",
+    "feature factory", "it project",
 ]
 
 # Company size preferences (startups/smaller weighted higher)

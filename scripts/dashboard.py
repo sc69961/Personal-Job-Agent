@@ -149,8 +149,12 @@ def _build_jobs_tab(jobs: list, run_time: str) -> str:
         rec_label  = rec.upper().replace("STRONG YES", "STRONG YES ★")
         score_class = "score-high" if score >= 80 else ("score-mid" if score >= 65 else "score-low")
 
+        confidence     = j.get("confidence", 50)
+        conf_label     = "High confidence" if confidence >= 80 else ("Medium confidence" if confidence >= 55 else "Low confidence — review manually")
+        conf_color     = "#4ade80" if confidence >= 80 else ("#fbbf24" if confidence >= 55 else "#f87171")
         strengths_html = "".join(f'<li>{s}</li>' for s in j.get("top_strengths", []))
         gaps_html      = "".join(f'<li>{g}</li>' for g in j.get("top_gaps", []))
+        reasons_html   = "".join(f'<li>{r}</li>' for r in j.get("top_reasons", []))
         short_desc     = j.get("short_description", "")
         match_summary  = j.get("match_summary", "")
         salary         = j.get("salary_estimate", "Not available")
@@ -171,9 +175,11 @@ def _build_jobs_tab(jobs: list, run_time: str) -> str:
             <span class="meta-tag">📍 {j.get('location','')}</span>
             <span class="meta-tag">💰 {salary}</span>
             <span class="meta-tag tier-tag">{tier_label}</span>
+            <span class="meta-tag" style="color:{conf_color};border-color:{conf_color};" title="Confidence in this score">🎯 {confidence}% — {conf_label}</span>
           </div>
           {f'<p class="short-desc">{short_desc}</p>' if short_desc else ''}
           <p class="match-summary">{match_summary}</p>
+          {f'<div class="reasons"><strong>📋 Why this score</strong><ul>{reasons_html}</ul></div>' if reasons_html else ''}
           <div class="strengths-gaps">
             {f'<div class="strengths"><strong>✅ Strengths</strong><ul>{strengths_html}</ul></div>' if strengths_html else ''}
             {f'<div class="gaps"><strong>⚠️ Gaps</strong><ul>{gaps_html}</ul></div>' if gaps_html else ''}
@@ -300,6 +306,9 @@ def generate_dashboard(
     .tier-tag {{ color: #818cf8; border-color: #3730a3; background: #1e1b4b; }}
     .short-desc {{ font-size: 0.83rem; color: #cbd5e1; font-style: italic; }}
     .match-summary {{ font-size: 0.82rem; color: #94a3b8; line-height: 1.55; }}
+    .reasons {{ font-size: 0.78rem; margin-bottom: 10px; }}
+    .reasons strong {{ color: #a78bfa; }}
+    .reasons ul {{ margin-top: 5px; padding-left: 14px; color: #94a3b8; line-height: 1.6; }}
     .strengths-gaps {{ display: flex; gap: 16px; font-size: 0.78rem; }}
     .strengths, .gaps {{ flex: 1; }}
     .strengths strong {{ color: #4ade80; }}

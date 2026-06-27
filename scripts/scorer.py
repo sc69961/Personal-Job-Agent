@@ -65,13 +65,22 @@ def pre_filter(job: dict, config: dict) -> tuple:
 
 
 CONDENSED_RESUME = """
-Steve Christian | Senior PM | Denver, CO (remote or Denver hybrid only)
-10+ years: DER orchestration, VPPs, demand response, grid-edge optimization, fintech payments platforms.
-Verizon (2020-2025): Incubated 5 x 0->1 products, secured $6M funding. Led AI-driven DER platform (VPP/demand response). Patent: energy usage optimization. Python/SQL analytics.
-Accenture (2017-2020): Airbnb payments platform ($10B+ annual volume, pre-IPO). Disney Parks PM (1M+ app downloads, 30K Cast Member workforce platform).
-Skills: DER/DERMS/VPP/V2G, APIs (REST/GraphQL), SQL, Python, AI/ML, Agile/SAFe.
-Strengths: Platform/API products, 0->1 incubation, growth/monetization. Not interested in ops/process PM, healthcare, pharma, telecom, or mining roles.
-MBA + dual BS (Info Systems, Psychology) — Appalachian State.
+Steve Christian | Senior Product Leader | Denver, CO (remote or Denver hybrid only)
+10+ years building 0->1 and platform-scale products across energy, fintech, and enterprise tech.
+
+EXPERIENCE:
+Verizon (2021-2025): Incubated 5 x 0->1 products, secured $6M executive funding. Led AI-driven DER/VPP orchestration platform (demand response, grid-edge optimization). Patent: energy usage optimization. Python/SQL analytics dashboards.
+Accenture (2017-2020): Airbnb global payments platform ($10B+ annual volume, pre-IPO). Disney Parks app (1M+ downloads, 30K Cast Member platform).
+
+DOMAIN DEPTH: DER, DERMS, VPP, HEMS, grid modernization, demand response, V2G, IoT, fintech payments, enterprise SaaS, AI/ML products, data platforms.
+TECH: APIs (REST/GraphQL), SQL, Python, microservices, cloud, LLM-enabled products, Jira, Figma.
+APPROACH: Hypothesis-driven, JTBD methodology, systems thinking, comfortable with ambiguity, strong executive communication.
+
+STRONG FIT: 0->1 ownership, platform/API products, AI-first orgs, energy/climate/utilities, high strategic ownership, product-led orgs, growth/monetization.
+MODERATE FIT: Enterprise SaaS, fintech, data platforms, digital transformation.
+NOT A FIT: Pure project/program management, feature delivery only, no strategic ownership, healthcare, pharma, telecom, mining.
+
+COMP TARGETS: Sr PM $180K-240K TC | Principal/Group PM $220K-325K TC | Director $275K-400K+ TC
 """.strip()
 
 
@@ -93,25 +102,43 @@ Description:
 {job['description'][:3000]}
 
 === SCORING CRITERIA ===
-- Salary floor: ${criteria['salary_floor']:,}/yr. If salary is listed and clearly below floor, heavily penalize.
-- Preferred locations: {', '.join(criteria['allowed_locations'])}. Remote roles score well. Fully on-site outside Denver/Boulder = penalize.
-- Company tier bonus: Climatetech/energy/DER/VPP/DERMS companies get +15 pts. Fintech/AI/startups get +5 pts.
-- Target company list: {', '.join(criteria.get('target_companies', [])[:30])} (and more). Being on this list gives +10 pts.
-- Preferred titles: {', '.join(criteria['preferred_titles'])}. Exact or close title match +5 pts.
-- Seniority: Must be senior-level (Sr PM, Group PM, Staff PM, Director, Head, VP). Junior roles score < 30.
-- High-signal keywords in JD: {', '.join(criteria['high_signal_keywords'])}. Each relevant keyword match +2 pts (cap +10).
-- Startup/smaller company preference: +5 pts if startup signals (Series A/B, small team, early stage).
-- Candidate strengths to match: DER/VPP platform experience, 0→1 product, fintech payments ($10B volume), cross-functional leadership, Python/SQL analytics, energy patent.
-- Penalty keywords: {', '.join(criteria['negative_keywords'])}. Each match -10 pts.
-- Role type bonus: Platform/API products +8 pts. 0->1 / new product incubation +8 pts. Growth/monetization +5 pts. Ops-only/process PM roles -10 pts.
-- Industry penalty: Healthcare, medtech, pharma, telecom, mining = automatic -20 pts (candidate explicitly excludes these).
-- Company stage: No preference — score on role quality, not stage.
+
+POSITIVE SIGNALS (add to score):
+- Energy/climate/DER/VPP/DERMS/grid company: +15 pts
+- Target company list hit ({', '.join(criteria.get('target_companies', [])[:20])} and more): +10 pts
+- Strategic ownership language ("own product strategy", "define vision", "set roadmap", "drive business outcomes", "general manager mindset", "build from ambiguity", "executive communication", "portfolio ownership"): +10 pts
+- 0->1 / new product incubation: +8 pts
+- Platform or API product: +8 pts
+- AI-first organization or AI/ML product: +8 pts
+- Title match ({', '.join(criteria['preferred_titles'])}): +8 pts. Director/Head/VP: +5 bonus.
+- Cross-functional leadership language ("lead cross-functional teams", "influence without authority", "executive stakeholders", "matrix leadership"): +5 pts
+- Growth or monetization focus: +5 pts
+- Product-led organization: +5 pts
+- Experimentation/analytics culture ("experimentation", "A/B testing", "KPIs", "product analytics", "hypothesis-driven", "growth loops"): +5 pts
+- Startup signals (Series A/B/C, early stage, small team): +5 pts
+- Fintech/payments/enterprise SaaS (moderate match): +3 pts
+
+NEGATIVE SIGNALS (subtract from score):
+- MAJOR (-15 each): project coordination only, feature factory, requirements gathering only, Jira administration, no product ownership language
+- MINOR (-5 each): scrum ceremonies focus, release management only, backlog management only
+- Domain mismatch — company sells into healthcare/pharma/telecom/mining but role is generic PM: -10 pts
+- Regulated domain requiring direct expertise (FDA, medical devices, mining engineering, telecom infrastructure): -20 pts
+- Salary clearly below $130K floor: -20 pts
+- Fully on-site outside Denver/Boulder/Colorado: -15 pts
+- Junior/APM/intern role: score < 25
+
+CONFIDENCE GUIDANCE:
+Rate your confidence in the score 0-100.
+- High confidence (80+): JD is detailed, clear scope, strong signal either way
+- Medium confidence (50-79): JD is somewhat vague or mixed signals
+- Low confidence (<50): JD is sparse, generic, or ambiguous about actual role scope
 
 === YOUR TASK ===
 Return ONLY valid JSON (no markdown, no explanation outside the JSON):
 
 {{
   "score": <integer 0-100>,
+  "confidence": <integer 0-100>,
   "title_match": <"strong" | "good" | "weak" | "poor">,
   "location_ok": <true | false>,
   "salary_ok": <true | false | "unknown">,
@@ -120,6 +147,7 @@ Return ONLY valid JSON (no markdown, no explanation outside the JSON):
   "seniority_ok": <true | false>,
   "top_strengths": [<string>, <string>, <string>],
   "top_gaps": [<string>, <string>],
+  "top_reasons": [<string>, <string>, <string>],
   "match_summary": "<2-3 sentence plain-English summary of fit. Be specific to THIS job and THIS candidate's background.>",
   "apply_recommendation": <"strong yes" | "yes" | "maybe" | "no">,
   "work_type": <"remote" | "hybrid" | "on-site" | "unknown">,
@@ -149,7 +177,7 @@ def score_job(job: dict, config: dict, client: Anthropic) -> dict:
         try:
             response = client.messages.create(
                 model="claude-haiku-4-5-20251001",  # fast + cheap for scoring
-                max_tokens=600,
+                max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = response.content[0].text.strip()
@@ -164,6 +192,7 @@ def score_job(job: dict, config: dict, client: Anthropic) -> dict:
             result = json.loads(raw)
 
             job["score"]              = result.get("score", 0)
+            job["confidence"]         = result.get("confidence", 50)
             job["title_match"]        = result.get("title_match", "unknown")
             job["location_ok"]        = result.get("location_ok", False)
             job["salary_ok"]          = result.get("salary_ok", "unknown")
@@ -172,6 +201,7 @@ def score_job(job: dict, config: dict, client: Anthropic) -> dict:
             job["seniority_ok"]       = result.get("seniority_ok", True)
             job["top_strengths"]      = result.get("top_strengths", [])
             job["top_gaps"]           = result.get("top_gaps", [])
+            job["top_reasons"]        = result.get("top_reasons", [])
             job["match_summary"]      = result.get("match_summary", "")
             job["apply_recommendation"] = result.get("apply_recommendation", "maybe")
             job["work_type"]            = result.get("work_type", "unknown")
