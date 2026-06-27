@@ -61,7 +61,8 @@ CLIMATEBASE_JOBS_URL = "https://climatebase.org/api/jobs/"
 def scrape_climatebase(max_jobs: int = 50) -> list[dict]:
     """
     Pull jobs from Climatebase's public API.
-    Returns a list of normalized job dicts.
+    Uses a session to pick up cookies from the homepage first,
+    which avoids the 403 that hits direct API calls.
     """
     jobs = []
     params = {
@@ -73,15 +74,25 @@ def scrape_climatebase(max_jobs: int = 50) -> list[dict]:
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
+            "Chrome/124.0.0.0 Safari/537.36"
         ),
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
         "Referer": "https://climatebase.org/jobs",
     }
 
     try:
-        resp = requests.get(CLIMATEBASE_JOBS_URL, params=params, headers=headers, timeout=20)
+        # Use a session so cookies from the homepage carry into the API call
+        session = requests.Session()
+        session.headers.update(headers)
+        session.get("https://climatebase.org/jobs", timeout=15)  # seed cookies
+        time.sleep(1)
+        resp = session.get(CLIMATEBASE_JOBS_URL, params=params, timeout=20)
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", [])
