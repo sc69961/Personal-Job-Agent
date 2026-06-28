@@ -1,8 +1,8 @@
-name: Job Agent — Bi-hourly Run
+name: Job Agent — Daily Run
 
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '30 12 * * *'
   workflow_dispatch:
 
 jobs:

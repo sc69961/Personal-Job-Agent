@@ -187,7 +187,18 @@ def run(args):
 
     # ── 5. SEND EMAIL DIGEST ──────────────────────────────────────────────
     logger.info("Step 5/5 — Sending Gmail digest...")
-    if not new_jobs and not args.email_only:
+
+    # Daily email cap — one digest per calendar day regardless of run frequency
+    email_flag_path = "./output/last_email_sent.txt"
+    today = datetime.now().strftime("%Y-%m-%d")
+    already_sent_today = False
+    if os.path.exists(email_flag_path) and not args.email_only:
+        with open(email_flag_path) as f:
+            already_sent_today = f.read().strip() == today
+
+    if already_sent_today:
+        logger.info("  → Digest already sent today — skipping to avoid duplicate emails")
+    elif not new_jobs and not args.email_only:
         logger.info("  → No new jobs this run — skipping email to avoid noise")
     else:
         try:
@@ -198,6 +209,9 @@ def run(args):
                 total_scraped=len(raw_jobs),
                 credentials_path=config["GOOGLE_CREDENTIALS_PATH"],
             )
+            if ok:
+                with open(email_flag_path, "w") as f:
+                    f.write(today)
             logger.info(f"  → Email {'sent ✓' if ok else 'failed ✗'} ({len(new_jobs)} new jobs)")
         except Exception as e:
             logger.warning(f"  Email send failed: {e}")
