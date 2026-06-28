@@ -4,6 +4,7 @@ classify status, and maintains output/crm.json as a persistent CRM store.
 """
 
 import os
+import re
 import json
 import pickle
 import hashlib
@@ -31,6 +32,64 @@ GMAIL_SEARCH_QUERIES = [
     # Offers
     'subject:(offer OR "pleased to" OR "excited to offer") newer_than:120d',
 ]
+
+# Status priority — higher index wins when merging
+STATUS_PRIORITY = [
+    "applied", "response_received", "interview_requested", "offer", "withdrawn", "rejected"
+]
+
+
+# ---------------------------------------------------------------------------
+# Company name normalization — strips legal suffixes so variants match
+# ---------------------------------------------------------------------------
+
+_LEGAL_SUFFIXES = re.compile(
+    r'\b(inc\.?|llc\.?|corp\.?|co\.?|ltd\.?|incorporated|limited|company)\b[\s,]*',
+    flags=re.I
+)
+
+def _normalize_company(name: str) -> str:
+    """Strip legal suffixes, punctuation, and extra spaces for fuzzy matching."""
+    name = _LEGAL_SUFFIXES.sub('', name)
+    name = re.sub(r'[^\w\s]', ' ', name)   # punctuation → space
+    return ' '.join(name.lower().split())
+
+
+def _app_id(company: str, job_title: str) -> str:
+    """Generate a stable ID from normalized company + title."""
+    norm_co    = _normalize_company(company)
+    norm_title = job_title.lower().strip()
+    return hashlib.md5(f"{norm_co}_{norm_title}".encode()).hexdigest()[:10]
+
+
+def _find_existing_by_company(company: str, app_by_id: dict) -> dict | None:
+    """
+    Find an existing CRM entry by normalized company name match.
+    Used to catch status updates that arrive in separate email threads.
+    Returns the best matching entry, or None.
+    """
+    norm = _normalize_company(company)
+    if not norm:
+        return None
+    candidates = []
+    for app in app_by_id.values():
+        existing_norm = _normalize_company(app.get("company", ""))
+        if existing_norm and existing_norm == norm:
+            candidates.append(app)
+    if not candidates:
+        return None
+    # Prefer the entry with the highest-priority status
+    def status_rank(a):
+        return STATUS_PRIORITY.index(a.get("status", "applied")) if a.get("status") in STATUS_PRIORITY else 0
+    return sorted(candidates, key=status_rank, reverse=True)[0]
+
+
+def _should_upgrade_status(current: str, new: str) -> bool:
+    """Return True if new status is higher priority than current."""
+    try:
+        return STATUS_PRIORITY.index(new) > STATUS_PRIORITY.index(current)
+    except ValueError:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +162,17 @@ If this thread is NOT related to a job application, return exactly: null
 If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
 
 {{
-  "job_title": "<job title applied for, or best guess>",
-  "company": "<company name>",
+  "job_title": "<job title applied for — check the subject line, email body, and any 'Re:' lines. If you see a specific role name, use it. Only use empty string if truly impossible to determine>",
+  "company": "<company name — strip legal suffixes like Inc, LLC, Corp from display but return the clean name>",
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
   "status": "<one of: applied | response_received | interview_requested | rejected | offer | withdrawn>",
   "status_label": "<one of: Applied | Response Received | Interview Requested | Rejected | Offer Received | Withdrawn>",
   "last_activity": "<YYYY-MM-DD of the most recent email in thread>",
-  "follow_up_date": "<YYYY-MM-DD — if no response yet, suggest following up in 7-10 business days from last_activity; if interview scheduled, put that date; if rejected leave empty>",
+  "follow_up_date": "<YYYY-MM-DD — if no response yet, suggest following up in 7-10 business days from last_activity; if interview scheduled, put that date; if rejected or offer, leave empty>",
   "recommended_action": "<1 concise sentence: the single most important action Steve should take right now>"
-}}"""
+}}
+
+IMPORTANT for job_title: Look carefully at the email subject lines (especially lines starting with 'Subject:', 'Re:', or 'Fwd:'). The role name is almost always mentioned. If the subject says 'Thank you for applying to Senior Product Manager at Acme', the job_title is 'Senior Product Manager'. Never leave job_title blank if the role name appears anywhere in the thread."""
 
     try:
         resp = client.messages.create(
@@ -133,6 +194,29 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
 
 
 # ---------------------------------------------------------------------------
+# URL lookup
+# ---------------------------------------------------------------------------
+
+def _try_match_url(company: str) -> str:
+    """Try to find a job URL from scored or raw results."""
+    norm = _normalize_company(company)
+    for path in ["./output/scored_jobs.json", "./output/raw_jobs.json"]:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                jobs = json.load(f)
+            for j in jobs:
+                if _normalize_company(j.get("company", "")) == norm:
+                    url = j.get("url", "")
+                    if url:
+                        return url
+        except Exception:
+            pass
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # CRM persistence
 # ---------------------------------------------------------------------------
 
@@ -148,27 +232,6 @@ def save_crm(crm: dict):
     crm["last_synced"] = datetime.now().isoformat()
     with open(CRM_PATH, "w") as f:
         json.dump(crm, f, indent=2)
-
-
-def _app_id(company: str, job_title: str) -> str:
-    return hashlib.md5(f"{company.lower().strip()}_{job_title.lower().strip()}".encode()).hexdigest()[:10]
-
-
-def _try_match_url(company: str) -> str:
-    """Try to find a job URL from the last scored results."""
-    scored_path = "./output/scored_jobs.json"
-    if not os.path.exists(scored_path):
-        return ""
-    try:
-        with open(scored_path) as f:
-            scored = json.load(f)
-        co = company.lower()
-        for sj in scored:
-            if co in sj.get("company", "").lower() or sj.get("company", "").lower() in co:
-                return sj.get("url", "")
-    except Exception:
-        pass
-    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -211,25 +274,43 @@ def sync_gmail_crm(config: dict) -> dict:
                 if not result:
                     continue
 
-                aid = _app_id(result.get("company", ""), result.get("job_title", ""))
+                company   = result.get("company", "")
+                job_title = result.get("job_title", "")
+                new_status = result.get("status", "applied")
+
+                # Primary match: exact company+title hash
+                aid = _app_id(company, job_title)
 
                 if aid in app_by_id:
-                    # Update mutable fields only
                     app = app_by_id[aid]
-                    app["status"]             = result.get("status", app["status"])
-                    app["status_label"]       = result.get("status_label", app["status_label"])
+                else:
+                    # Secondary match: same normalized company name (catches cross-thread status updates)
+                    app = _find_existing_by_company(company, app_by_id)
+
+                if app:
+                    # Update mutable fields — only upgrade status, never downgrade
+                    if _should_upgrade_status(app.get("status", "applied"), new_status):
+                        app["status"]       = new_status
+                        app["status_label"] = result.get("status_label", app["status_label"])
                     app["last_activity"]      = result.get("last_activity", app.get("last_activity", ""))
-                    app["follow_up_date"]     = result.get("follow_up_date", app.get("follow_up_date", ""))
-                    app["recommended_action"] = result.get("recommended_action", app.get("recommended_action", ""))
+                    # Fill in missing job title if we now have one
+                    if not app.get("job_title") and job_title:
+                        app["job_title"] = job_title
+                    # Fill in missing URL
+                    if not app.get("job_url"):
+                        app["job_url"] = _try_match_url(company)
+                    if _should_upgrade_status(app.get("status", "applied"), new_status):
+                        app["follow_up_date"]     = result.get("follow_up_date", app.get("follow_up_date", ""))
+                        app["recommended_action"] = result.get("recommended_action", app.get("recommended_action", ""))
                     app.setdefault("thread_ids", []).append(tid)
                 else:
                     new_app = {
                         "id":                 aid,
-                        "job_title":          result.get("job_title", "Unknown Role"),
-                        "company":            result.get("company", "Unknown Company"),
-                        "job_url":            _try_match_url(result.get("company", "")),
+                        "job_title":          job_title,
+                        "company":            company,
+                        "job_url":            _try_match_url(company),
                         "applied_date":       result.get("applied_date", ""),
-                        "status":             result.get("status", "applied"),
+                        "status":             new_status,
                         "status_label":       result.get("status_label", "Applied"),
                         "last_activity":      result.get("last_activity", ""),
                         "follow_up_date":     result.get("follow_up_date", ""),
