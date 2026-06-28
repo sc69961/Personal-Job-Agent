@@ -124,7 +124,17 @@ def run(args):
         logger.info("Skipping scoring — loading last scored jobs")
         with open(scored_path) as f:
             scored_jobs = json.load(f)
+        known_job_ids = set()  # email_only always sends
     else:
+        # Snapshot existing qualifying IDs — used to detect truly new jobs this run
+        known_job_ids = set()
+        if os.path.exists(scored_path):
+            try:
+                with open(scored_path) as f:
+                    known_job_ids = {j["id"] for j in json.load(f)}
+            except Exception:
+                pass
+
         logger.info(f"Step 2/5 — Scoring {len(raw_jobs)} jobs with Claude...")
         from scripts.scorer import score_all_jobs
         scored_jobs = score_all_jobs(
@@ -140,6 +150,10 @@ def run(args):
     if not scored_jobs:
         logger.warning("No qualifying jobs found. Consider lowering MIN_SCORE_TO_INCLUDE.")
         return
+
+    # Determine which jobs are new this run (not seen in previous scored cache)
+    new_jobs = [j for j in scored_jobs if j["id"] not in known_job_ids]
+    logger.info(f"  → {len(new_jobs)} new qualifying jobs this run")
 
     # ── 3. SYNC GMAIL CRM ────────────────────────────────────────────────
     logger.info("Step 3/5 — Syncing Gmail CRM...")
@@ -173,17 +187,20 @@ def run(args):
 
     # ── 5. SEND EMAIL DIGEST ──────────────────────────────────────────────
     logger.info("Step 5/5 — Sending Gmail digest...")
-    try:
-        from scripts.gmail_sender import send_digest
-        ok = send_digest(
-            scored_jobs,
-            config=config,
-            total_scraped=len(raw_jobs),
-            credentials_path=config["GOOGLE_CREDENTIALS_PATH"],
-        )
-        logger.info(f"  → Email {'sent ✓' if ok else 'failed ✗'}")
-    except Exception as e:
-        logger.warning(f"  Email send failed: {e}")
+    if not new_jobs and not args.email_only:
+        logger.info("  → No new jobs this run — skipping email to avoid noise")
+    else:
+        try:
+            from scripts.gmail_sender import send_digest
+            ok = send_digest(
+                scored_jobs,
+                config=config,
+                total_scraped=len(raw_jobs),
+                credentials_path=config["GOOGLE_CREDENTIALS_PATH"],
+            )
+            logger.info(f"  → Email {'sent ✓' if ok else 'failed ✗'} ({len(new_jobs)} new jobs)")
+        except Exception as e:
+            logger.warning(f"  Email send failed: {e}")
 
     _print_summary(scored_jobs, config)
 

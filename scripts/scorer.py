@@ -66,7 +66,7 @@ def pre_filter(job: dict, config: dict) -> tuple:
 
 CONDENSED_RESUME = """
 Steve Christian | Senior Product Leader | Denver, CO (remote or Denver hybrid only)
-10+ years building 0->1 and platform-scale products across energy, fintech, and enterprise tech.
+10+ years total PM experience. ~4-5 years in energy (Verizon 2021-2025). Prior: fintech and enterprise digital products.
 
 EXPERIENCE:
 Verizon (2021-2025): Incubated 5 x 0->1 products, secured $6M executive funding. Led AI-driven DER/VPP orchestration platform (demand response, grid-edge optimization). Patent: energy usage optimization. Python/SQL analytics dashboards.
@@ -76,9 +76,13 @@ DOMAIN DEPTH: DER, DERMS, VPP, HEMS, grid modernization, demand response, V2G, I
 TECH: APIs (REST/GraphQL), SQL, Python, microservices, cloud, LLM-enabled products, Jira, Figma.
 APPROACH: Hypothesis-driven, JTBD methodology, systems thinking, comfortable with ambiguity, strong executive communication.
 
-STRONG FIT: 0->1 ownership, platform/API products, AI-first orgs, energy/climate/utilities, high strategic ownership, product-led orgs, growth/monetization.
+CRITICAL — ENERGY EXPERTISE CONTEXT: Steve has ~4-5 years in energy as a SOFTWARE PRODUCT MANAGER building platforms for energy companies. He is NOT an energy developer, energy financier, power trader, or infrastructure investor. He has NEVER: negotiated PPAs or offtake agreements, managed EPC contractors, developed utility-scale generation projects, built technoeconomic models, structured project finance or infrastructure investments, or commercialized generation technologies. Roles requiring those skills are a POOR FIT.
+
+CRITICAL — NO DEEP SCIENTIFIC/TECHNICAL DOMAIN EXPERTISE: Steve does not have specialized expertise in: meteorology, atmospheric science, weather modeling (NWP, GNSS-RO, mesoscale), geospatial/remote sensing, genomics, materials science, physics, or other hard science/engineering fields. Roles that require "8+ years in [scientific domain]" or "deep expertise in [scientific discipline]" as a hard requirement are a POOR FIT even if the PM function looks right.
+
+STRONG FIT: 0->1 ownership, platform/API products, AI-first orgs, energy/climate/utilities SOFTWARE companies, high strategic ownership, product-led orgs, growth/monetization.
 MODERATE FIT: Enterprise SaaS, fintech, data platforms, digital transformation.
-NOT A FIT: Pure project/program management, feature delivery only, no strategic ownership, healthcare, pharma, telecom, mining.
+NOT A FIT: Pure project/program management, feature delivery only, no strategic ownership, healthcare, pharma, telecom, mining. Also NOT a fit: energy project development, energy finance/commercialization, PPA/offtake negotiation, EPC management, utility-scale project development, technoeconomic modeling, infrastructure investment diligence, generation technology commercialization. Roles requiring deep scientific domain expertise (meteorology, atmospheric science, geospatial, genomics, etc.).
 
 COMP TARGETS: Sr PM $180K-240K TC | Principal/Group PM $220K-325K TC | Director $275K-400K+ TC
 """.strip()
@@ -123,6 +127,8 @@ NEGATIVE SIGNALS (subtract from score):
 - MINOR (-5 each): scrum ceremonies focus, release management only, backlog management only
 - Domain mismatch — company sells into healthcare/pharma/telecom/mining but role is generic PM: -10 pts
 - Regulated domain requiring direct expertise (FDA, medical devices, mining engineering, telecom infrastructure): -20 pts
+- Wrong function in energy (-25 pts): Role is in energy project development, energy finance, infrastructure investment, or generation commercialization — NOT software product management. Signals: requires PPA/offtake negotiation experience, EPC contractor management, utility-scale project development, technoeconomic modeling, project finance, infrastructure investment diligence, venture-style energy investing, or commercializing generation technologies. These are energy developer/financier skills Steve does not have. Apply this penalty even if the company is a strong climate/energy target company.
+- Required deep scientific/technical domain expertise (-25 pts): Role requires years of hands-on expertise in a hard science or engineering discipline Steve does not have. Signals: "8+ years in [scientific field]", requires deep expertise in meteorology/NWP/atmospheric science/GNSS-RO, geospatial/remote sensing, genomics, materials science, radar/satellite data processing, climate modeling, or similar. Apply even if the job title is "Product Manager" — domain expertise as a hard requirement disqualifies regardless of PM function.
 - Salary clearly below $130K floor: -20 pts
 - Fully on-site outside Denver/Boulder/Colorado: -15 pts
 - Junior/APM/intern role: score < 25
