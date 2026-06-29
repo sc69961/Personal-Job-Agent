@@ -88,7 +88,14 @@ COMP TARGETS: Sr PM $180K-240K TC | Principal/Group PM $220K-325K TC | Director 
 """.strip()
 
 
-def build_scoring_prompt(job: dict, resume: str, criteria: dict) -> str:
+def build_scoring_prompt(job: dict, resume: str, criteria: dict, positive_outcome_companies: list = None) -> str:
+    positive_outcome_companies = positive_outcome_companies or []
+    crm_signal = (
+        f"CRM FEEDBACK — companies where Steve previously got interviews or offers (proven fit signal): "
+        f"{', '.join(positive_outcome_companies)}"
+        if positive_outcome_companies else
+        "CRM FEEDBACK — no interview/offer outcomes recorded yet"
+    )
     return f"""You are a job-fit analyst. Score this job posting for this candidate.
 
 === CANDIDATE SUMMARY ===
@@ -110,17 +117,22 @@ Description:
 POSITIVE SIGNALS (add to score):
 - Energy/climate/DER/VPP/DERMS/grid company: +15 pts
 - Target company list hit ({', '.join(criteria.get('target_companies', [])[:20])} and more): +10 pts
+- CRM proven fit — this company is in the CRM feedback list above (Steve got an interview or offer here): +8 pts
 - Strategic ownership language ("own product strategy", "define vision", "set roadmap", "drive business outcomes", "general manager mindset", "build from ambiguity", "executive communication", "portfolio ownership"): +10 pts
 - 0->1 / new product incubation: +8 pts
 - Platform or API product: +8 pts
 - AI-first organization or AI/ML product: +8 pts
-- Title match ({', '.join(criteria['preferred_titles'])}): +8 pts. Director/Head/VP: +5 bonus.
+- Title match (Senior Product Manager, Staff PM, Principal PM, Director of Product, Head of Product, VP Product, Group PM, Product Lead, or semantic equivalents): +8 pts. Director/Head/VP/GM title: +5 bonus.
+- Founding PM or first PM hire ("you'll be our first PM", "founding PM", "building the PM function"): +10 pts (high ownership signal)
+- Small PM team (2-5 PMs, high visibility, broad scope): +5 pts
 - Cross-functional leadership language ("lead cross-functional teams", "influence without authority", "executive stakeholders", "matrix leadership"): +5 pts
 - Growth or monetization focus: +5 pts
 - Product-led organization: +5 pts
 - Experimentation/analytics culture ("experimentation", "A/B testing", "KPIs", "product analytics", "hypothesis-driven", "growth loops"): +5 pts
-- Startup signals (Series A/B/C, early stage, small team): +5 pts
+- Series A/B/C startup with strong ownership signals: +5 pts
 - Fintech/payments/enterprise SaaS (moderate match): +3 pts
+
+{crm_signal}
 
 NEGATIVE SIGNALS (subtract from score):
 - MAJOR (-15 each): project coordination only, feature factory, requirements gathering only, Jira administration, no product ownership language
@@ -132,6 +144,8 @@ NEGATIVE SIGNALS (subtract from score):
 - Salary clearly below $130K floor: -20 pts
 - Fully on-site outside Denver/Boulder/Colorado: -15 pts
 - Junior/APM/intern role: score < 25
+- Large PM organization (50+ PMs, highly matrixed, limited strategic scope per PM): -5 pts
+- Vague/generic JD (no specific product domain, no ownership language, no team structure — reads like a copy-paste template): -10 pts and set confidence below 40
 
 CONFIDENCE GUIDANCE:
 Rate your confidence in the score 0-100.
@@ -163,7 +177,7 @@ Return ONLY valid JSON (no markdown, no explanation outside the JSON):
 """
 
 
-def score_job(job: dict, config: dict, client: Anthropic) -> dict:
+def score_job(job: dict, config: dict, client: Anthropic, positive_outcome_companies: list = None) -> dict:
     """
     Call Claude to score a single job. Returns the job dict with score fields populated.
     Retries once on failure.
@@ -177,7 +191,7 @@ def score_job(job: dict, config: dict, client: Anthropic) -> dict:
         "target_companies":    config.get("ALL_TARGET_COMPANIES", []),
     }
 
-    prompt = build_scoring_prompt(job, config["RESUME_TEXT"], criteria)
+    prompt = build_scoring_prompt(job, config["RESUME_TEXT"], criteria, positive_outcome_companies)
 
     for attempt in range(2):
         try:
@@ -245,6 +259,7 @@ def score_all_jobs(
     min_score: int = 55,
     delay_between: float = 0.5,
     cache_path: str = "./output/scored_jobs.json",
+    positive_outcome_companies: list = None,
 ) -> list[dict]:
     """
     Score every job, skipping any already scored in cache.
@@ -276,7 +291,7 @@ def score_all_jobs(
                 print(f"  [{i}/{total}] (filtered) {job['title']} @ {job['company']} — {reason}")
                 continue
             print(f"  [{i}/{total}] Scoring: {job['title']} @ {job['company']}...", end=" ", flush=True)
-            job = score_job(job, config, client)
+            job = score_job(job, config, client, positive_outcome_companies)
             print(f"→ {job['score']}")
             scored.append(job)
             new_count += 1

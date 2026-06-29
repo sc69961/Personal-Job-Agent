@@ -113,12 +113,44 @@ def run(args):
         logger.info("Step 1/5 — Scraping job boards...")
         from scripts.scraper import scrape_all
         raw_jobs = scrape_all(max_per_source=config["MAX_JOBS_PER_SOURCE"])
+
+        # Deduplicate by URL — same job posted on multiple boards
+        seen_urls = set()
+        deduped = []
+        for job in raw_jobs:
+            url = job.get("url", "")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            deduped.append(job)
+        if len(deduped) < len(raw_jobs):
+            logger.info(f"  → Removed {len(raw_jobs) - len(deduped)} duplicate URLs")
+        raw_jobs = deduped
+
         with open(raw_jobs_path, "w") as f:
             json.dump(raw_jobs, f, indent=2)
         logger.info(f"  → {len(raw_jobs)} raw jobs saved")
 
     # ── 2. SCORE ──────────────────────────────────────────────────────────
     scored_path = "./output/scored_jobs.json"
+
+    # Load CRM outcomes to use as positive signals in scoring
+    positive_outcome_companies = []
+    crm_path = "./output/crm.json"
+    if os.path.exists(crm_path):
+        try:
+            with open(crm_path) as f:
+                crm_data = json.load(f)
+            positive_outcome_companies = [
+                app["company"] for app in crm_data.get("applications", [])
+                if app.get("status") in ("interview_requested", "offer")
+                and app.get("company")
+            ]
+            if positive_outcome_companies:
+                logger.info(f"  → CRM: {len(positive_outcome_companies)} companies with positive outcomes loaded for scoring")
+        except Exception:
+            pass
 
     if args.email_only:
         logger.info("Skipping scoring — loading last scored jobs")
@@ -142,6 +174,7 @@ def run(args):
             config,
             min_score=config["MIN_SCORE_TO_INCLUDE"],
             cache_path=scored_path,
+            positive_outcome_companies=positive_outcome_companies,
         )
         with open(scored_path, "w") as f:
             json.dump(scored_jobs, f, indent=2)
