@@ -132,7 +132,34 @@ def _build_crm_tab(crm: dict) -> str:
 # Jobs tab HTML builder
 # ---------------------------------------------------------------------------
 
-def _build_jobs_tab(jobs: list, run_time: str) -> str:
+def _normalize(name: str) -> str:
+    """Normalize company name for CRM cross-reference."""
+    import re
+    name = re.sub(r'\b(inc\.?|llc\.?|corp\.?|co\.?|ltd\.?|incorporated|limited|company)\b[\s,]*', '', name, flags=re.I)
+    name = re.sub(r'[^\w\s]', ' ', name)
+    return ' '.join(name.lower().split())
+
+
+def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Build CRM lookup: normalized company → (status, status_label)
+    crm_lookup = {}
+    for app in (crm or {}).get("applications", []):
+        key = _normalize(app.get("company", ""))
+        if key:
+            crm_lookup[key] = (app.get("status", "applied"), app.get("status_label", "Applied"))
+
+    crm_status_styles = {
+        "offer":              ("🏆 Offer",        "#fbbf24", "#2a1f00", "#78350f"),
+        "interview_requested":("🎯 Interviewing",  "#4ade80", "#0f2e1a", "#166534"),
+        "response_received":  ("💬 Responded",     "#67e8f9", "#0c2233", "#0e4f66"),
+        "applied":            ("✉️ Applied",       "#94a3b8", "#1a1d27", "#2d3148"),
+        "ghosted":            ("👻 Ghosted",       "#475569", "#1a1d27", "#2d3148"),
+        "rejected":           ("✗ Rejected",      "#f87171", "#2a0f0f", "#7f1d1d"),
+        "withdrawn":          ("↩ Withdrawn",     "#64748b", "#1a1d27", "#2d3148"),
+    }
+
     total = len(jobs)
     cards_html = ""
     for j in jobs:
@@ -160,13 +187,25 @@ def _build_jobs_tab(jobs: list, run_time: str) -> str:
         salary         = j.get("salary_estimate", "Not available")
         url            = j.get("url", "#")
 
+        # NEW badge — only shows today
+        is_new = j.get("first_seen", "") == today
+        new_badge = '<span style="display:inline-block;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:5px;background:#1e2a0f;color:#a3e635;border:1px solid #3f6212;margin-left:8px;letter-spacing:0.05em;">NEW</span>' if is_new else ""
+
+        # APPLIED / CRM status badge
+        crm_key = _normalize(j.get("company", ""))
+        crm_badge = ""
+        if crm_key in crm_lookup:
+            status, status_label = crm_lookup[crm_key]
+            style_label, text_c, bg_c, border_c = crm_status_styles.get(status, ("Applied", "#94a3b8", "#1a1d27", "#2d3148"))
+            crm_badge = f'<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:3px 8px;border-radius:5px;background:{bg_c};color:{text_c};border:1px solid {border_c};margin-left:6px;">{style_label}</span>'
+
         cards_html += f"""
         <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}" data-rec="{rec}">
           <div class="card-header">
             <div class="score-badge {score_class}">{score}</div>
             <div class="card-title-block">
-              <div class="job-title">{j.get('title','')}</div>
-              <div class="company-name">{tier_emoji} {j.get('company','')}</div>
+              <div class="job-title">{j.get('title','')}{new_badge}</div>
+              <div class="company-name">{tier_emoji} {j.get('company','')}{crm_badge}</div>
             </div>
             <span class="rec-badge {rec_class}">{rec_label}</span>
           </div>
@@ -237,7 +276,12 @@ def _build_jobs_tab(jobs: list, run_time: str) -> str:
 # Market Intelligence tab
 # ---------------------------------------------------------------------------
 
-def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
+def _build_market_tab(
+    stats_path: str = "./output/market_stats.json",
+    context_path: str = "./config/company_context.json",
+) -> str:
+    from datetime import timedelta
+
     history = []
     if os.path.exists(stats_path):
         try:
@@ -249,9 +293,61 @@ def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
     if not history:
         return '<div style="padding:60px 32px;text-align:center;color:#475569;">No market data yet — run the agent at least once to populate stats.</div>'
 
+    # Load company context profiles
+    ctx_profiles = {}
+    if os.path.exists(context_path):
+        try:
+            with open(context_path) as f:
+                ctx_profiles = json.load(f)
+        except Exception:
+            pass
+
     latest = history[-1]
     companies = latest.get("companies", [])
     pm_companies = [c for c in companies if c.get("pm_roles", 0) > 0]
+
+    # ── Build per-company history dict: name → {date: pm_count} ──
+    co_history: dict = {}
+    for snap in history:
+        for c in snap.get("companies", []):
+            name = c["company"]
+            co_history.setdefault(name, {})[snap["date"]] = c.get("pm_roles", 0)
+
+    latest_date = latest["date"]
+
+    # ── New This Week: companies with PM roles now that had 0 (or were absent) last snapshot ──
+    prev_pm_cos: set = set()
+    if len(history) >= 2:
+        prev = history[-2]
+        prev_pm_cos = {c["company"] for c in prev.get("companies", []) if c.get("pm_roles", 0) > 0}
+    new_this_week = [c for c in pm_companies if c["company"] not in prev_pm_cos]
+
+    # ── Heating Up: companies whose PM count increased over last ~4 weeks ──
+    # Look at earliest snapshot >= 21 days ago vs latest; require increase ≥ 1
+    cutoff_date = (datetime.strptime(latest_date, "%Y-%m-%d") - timedelta(days=21)).strftime("%Y-%m-%d")
+    heating_up = []
+    seen_names = set()
+    for c in pm_companies:
+        name = c["company"]
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        h = co_history.get(name, {})
+        old_dates = [d for d in sorted(h.keys()) if d <= cutoff_date]
+        if not old_dates:
+            continue  # not enough history yet
+        old_count = h[old_dates[0]]
+        now_count = c.get("pm_roles", 0)
+        if now_count > old_count:
+            heating_up.append({
+                "company": name,
+                "tier": c.get("tier", "other"),
+                "titles": c.get("titles", []),
+                "old_count": old_count,
+                "now_count": now_count,
+                "from_date": old_dates[0],
+            })
+    heating_up.sort(key=lambda x: x["now_count"] - x["old_count"], reverse=True)
 
     # ── Trend chart data ──
     dates_js   = json.dumps([s["date"] for s in history])
@@ -299,21 +395,92 @@ def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
           </div>
         </div>"""
 
-    # ── Company table ──
+    # ── New This Week cards ──
+    def _company_signal_card(c: dict, badge_html: str) -> str:
+        name = c["company"]
+        profile = ctx_profiles.get(name, {})
+        tier = c.get("tier", "other")
+        tier_emoji = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "🏢")
+        titles = c.get("titles", [])
+        titles_html = " · ".join(f'<span style="color:#94a3b8;">{t}</span>' for t in titles[:3])
+        stage    = profile.get("stage", "")
+        funding  = profile.get("funding", "")
+        headcount = profile.get("headcount", "")
+        what     = profile.get("what_they_do", "")
+        why      = profile.get("why_relevant", "")
+        meta_bits = " &nbsp;·&nbsp; ".join(x for x in [stage, funding, headcount] if x)
+        return f"""
+        <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:10px;padding:16px;margin-bottom:12px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+            <div>
+              <span style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{tier_emoji} {name}</span>
+              {badge_html}
+            </div>
+            <span style="font-size:0.75rem;color:#818cf8;white-space:nowrap;">{c.get('pm_roles',0)} PM role{'s' if c.get('pm_roles',1)!=1 else ''}</span>
+          </div>
+          {f'<div style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">{meta_bits}</div>' if meta_bits else ''}
+          {f'<div style="font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;">{what}</div>' if what else ''}
+          {f'<div style="font-size:0.75rem;color:#4ade80;">→ {why}</div>' if why else ''}
+          {f'<div style="font-size:0.75rem;color:#475569;margin-top:6px;">{titles_html}</div>' if titles_html else ''}
+        </div>"""
+
+    def _heating_card(h: dict) -> str:
+        name = h["company"]
+        profile = ctx_profiles.get(name, {})
+        tier = h.get("tier", "other")
+        tier_emoji = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "🏢")
+        delta = h["now_count"] - h["old_count"]
+        delta_html = f'<span style="color:#fbbf24;font-weight:700;">+{delta} PM role{"s" if delta!=1 else ""}</span> since {h["from_date"]}'
+        stage    = profile.get("stage", "")
+        funding  = profile.get("funding", "")
+        headcount = profile.get("headcount", "")
+        what     = profile.get("what_they_do", "")
+        why      = profile.get("why_relevant", "")
+        meta_bits = " &nbsp;·&nbsp; ".join(x for x in [stage, funding, headcount] if x)
+        titles_html = " · ".join(f'<span style="color:#94a3b8;">{t}</span>' for t in h.get("titles", [])[:3])
+        return f"""
+        <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:10px;padding:16px;margin-bottom:12px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+            <span style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{tier_emoji} {name}</span>
+            <span style="font-size:0.75rem;">{delta_html}</span>
+          </div>
+          {f'<div style="font-size:0.75rem;color:#64748b;margin-bottom:6px;">{meta_bits}</div>' if meta_bits else ''}
+          {f'<div style="font-size:0.8rem;color:#cbd5e1;margin-bottom:4px;">{what}</div>' if what else ''}
+          {f'<div style="font-size:0.75rem;color:#4ade80;">→ {why}</div>' if why else ''}
+          {f'<div style="font-size:0.75rem;color:#475569;margin-top:6px;">{titles_html}</div>' if titles_html else ''}
+        </div>"""
+
+    new_cards_html = "".join(
+        _company_signal_card(c, '<span style="display:inline-block;font-size:0.68rem;font-weight:800;padding:2px 7px;border-radius:4px;background:#1e2a0f;color:#a3e635;border:1px solid #3f6212;margin-left:8px;">NEW</span>')
+        for c in new_this_week
+    ) or '<div style="color:#475569;font-size:0.82rem;padding:12px 0;">No new companies since last run.</div>'
+
+    heating_cards_html = "".join(
+        _heating_card(h) for h in heating_up
+    ) or '<div style="color:#475569;font-size:0.82rem;padding:12px 0;">Not enough history yet — check back after a few weeks of daily runs.</div>'
+
+    # ── Full company table with context ──
     company_rows = ""
     for c in pm_companies:
+        name = c["company"]
+        profile = ctx_profiles.get(name, {})
         titles_html = "<br>".join(f"<span style='font-size:0.75rem;color:#94a3b8;'>· {t}</span>" for t in c.get("titles", []))
         tier = c.get("tier", "other")
         tier_badge = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "")
-        locs = list(set(l for l in c.get("locations", []) if l))
-        loc_str = ", ".join(locs[:3]) or "—"
+        stage   = profile.get("stage", "—")
+        funding = profile.get("funding", "—")
+        what    = profile.get("what_they_do", "")
         company_rows += f"""
         <tr>
-          <td><span style="font-weight:600;color:#f1f5f9;">{tier_badge} {c['company']}</span></td>
+          <td>
+            <span style="font-weight:600;color:#f1f5f9;">{tier_badge} {name}</span>
+            {f'<div style="font-size:0.72rem;color:#475569;margin-top:2px;">{what[:80]}{"…" if len(what)>80 else ""}</div>' if what else ''}
+          </td>
           <td style="text-align:center;color:#818cf8;font-weight:700;">{c['pm_roles']}</td>
           <td style="text-align:center;color:#64748b;">{c['total_roles']}</td>
           <td>{titles_html}</td>
-          <td style="color:#64748b;font-size:0.78rem;">{loc_str}</td>
+          <td style="color:#64748b;font-size:0.75rem;white-space:nowrap;">{stage}</td>
+          <td style="color:#64748b;font-size:0.75rem;">{funding}</td>
         </tr>"""
 
     # ── Source breakdown ──
@@ -333,13 +500,29 @@ def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
     <div class="stat-card"><span class="stat-num" style="color:#818cf8;">{latest.get('total_pm_roles',0)}</span><span class="stat-label">PM roles found</span></div>
     <div class="stat-card"><span class="stat-num">{latest.get('companies_hiring',0)}</span><span class="stat-label">Companies hiring</span></div>
     <div class="stat-card"><span class="stat-num" style="color:#4ade80;">{latest.get('companies_with_pm_roles',0)}</span><span class="stat-label">With PM openings</span></div>
-    <div class="stat-card"><span class="stat-num" style="color:#fbbf24;">{len(history)}</span><span class="stat-label">Runs tracked</span></div>
+    <div class="stat-card"><span class="stat-num" style="color:#fbbf24;">{len(history)}</span><span class="stat-label">Days tracked</span></div>
+  </div>
+
+  <!-- Signals row: New + Heating Up side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;">
+
+    <div style="background:#13151f;border:1px solid #2d3148;border-radius:12px;padding:20px;">
+      <div style="font-size:0.85rem;font-weight:700;color:#a3e635;margin-bottom:14px;">🆕 New This Run ({len(new_this_week)})</div>
+      <div style="font-size:0.75rem;color:#475569;margin-bottom:12px;">Companies with PM openings that had none in the previous snapshot</div>
+      {new_cards_html}
+    </div>
+
+    <div style="background:#13151f;border:1px solid #2d3148;border-radius:12px;padding:20px;">
+      <div style="font-size:0.85rem;font-weight:700;color:#fbbf24;margin-bottom:14px;">🔥 Heating Up ({len(heating_up)})</div>
+      <div style="font-size:0.75rem;color:#475569;margin-bottom:12px;">PM role count increased over the last 3+ weeks</div>
+      {heating_cards_html}
+    </div>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:28px;">
 
     <!-- Trend chart -->
-    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;grid-column:span 1;">
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;">
       <div style="font-size:0.85rem;font-weight:700;color:#94a3b8;margin-bottom:14px;">📈 PM Roles Over Time</div>
       <canvas id="trendChart" height="160"></canvas>
     </div>
@@ -359,20 +542,21 @@ def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
 
   <div style="display:grid;grid-template-columns:3fr 1fr;gap:20px;">
 
-    <!-- Company table -->
+    <!-- Full company table -->
     <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
       <div style="padding:16px 20px;border-bottom:1px solid #2d3148;font-size:0.85rem;font-weight:700;color:#94a3b8;">
-        🏢 Companies With PM Openings ({len(pm_companies)})
+        🏢 All Companies With PM Openings ({len(pm_companies)})
       </div>
       <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
           <thead>
             <tr style="border-bottom:1px solid #2d3148;">
               <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Company</th>
-              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">PM Roles</th>
-              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">All Roles</th>
+              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">PM</th>
+              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">All</th>
               <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Titles</th>
-              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Location</th>
+              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Stage</th>
+              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Funding</th>
             </tr>
           </thead>
           <tbody>{company_rows}</tbody>
@@ -445,7 +629,7 @@ def generate_dashboard(
     crm       = crm or {}
     crm_count = len(crm.get("applications", []))
 
-    jobs_tab_html   = _build_jobs_tab(jobs, run_time)
+    jobs_tab_html   = _build_jobs_tab(jobs, run_time, crm=crm)
     crm_tab_html    = _build_crm_tab(crm)
     market_tab_html = _build_market_tab()
 

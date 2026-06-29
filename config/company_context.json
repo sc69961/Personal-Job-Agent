@@ -1,0 +1,282 @@
+{
+  "Uplight": {
+    "stage": "Private / Growth",
+    "funding": "$580M+ raised",
+    "headcount": "500–700",
+    "what_they_do": "Energy customer engagement platform for utilities — demand response, efficiency programs, DER enrollment.",
+    "why_relevant": "Direct DER/VPP overlap; Denver HQ; already interviewing"
+  },
+  "Voltus": {
+    "stage": "Private / Growth",
+    "funding": "$100M+ raised",
+    "headcount": "100–200",
+    "what_they_do": "Virtual power plant platform aggregating demand response from commercial and industrial customers.",
+    "why_relevant": "Core VPP match; active interview history"
+  },
+  "WeaveGrid": {
+    "stage": "Series B",
+    "funding": "$53M raised",
+    "headcount": "50–100",
+    "what_they_do": "Software platform helping utilities manage EV charging load and grid integration.",
+    "why_relevant": "V2G/EV grid integration; strong PM ownership model; interview history"
+  },
+  "Leap Energy": {
+    "stage": "Series B",
+    "funding": "$55M raised",
+    "headcount": "50–150",
+    "what_they_do": "VPP aggregation platform enabling DER assets to participate in wholesale energy markets.",
+    "why_relevant": "Direct VPP/DER match; platform-oriented PM roles"
+  },
+  "Omnidian": {
+    "stage": "Series C",
+    "funding": "$100M+ raised",
+    "headcount": "100–300",
+    "what_they_do": "Solar fleet performance monitoring and operations platform for residential and commercial assets.",
+    "why_relevant": "Active offer; strong DER software fit"
+  },
+  "EnergyHub": {
+    "stage": "Private (Oracle subsidiary)",
+    "funding": "Acquired",
+    "headcount": "100–200",
+    "what_they_do": "DERMS platform enabling utilities to manage smart thermostats, batteries, EVs, and other grid-edge devices.",
+    "why_relevant": "DERMS/DER core; direct product overlap"
+  },
+  "Enode": {
+    "stage": "Series A",
+    "funding": "$21M raised",
+    "headcount": "30–70",
+    "what_they_do": "API platform connecting EV chargers, inverters, and batteries to energy apps and VPPs.",
+    "why_relevant": "DER API infrastructure; YC-backed; founding PM opportunity"
+  },
+  "Dynamic Grid": {
+    "stage": "Seed / Early",
+    "funding": "Undisclosed",
+    "headcount": "10–30",
+    "what_they_do": "Grid flexibility software for utilities to optimize distributed energy resources in real time.",
+    "why_relevant": "Early-stage DER; high ownership potential"
+  },
+  "BoxPower": {
+    "stage": "Series A",
+    "funding": "~$20M raised",
+    "headcount": "30–80",
+    "what_they_do": "Containerized solar+storage+generator microgrids for remote and resilience applications.",
+    "why_relevant": "Interview history; microgrid/DER product"
+  },
+  "Xcel Energy": {
+    "stage": "Public (NASDAQ: XEL)",
+    "funding": "Public utility",
+    "headcount": "10,000+",
+    "what_they_do": "Vertically integrated electric and gas utility serving CO, MN, TX, and other states.",
+    "why_relevant": "Denver HQ; interview history; grid modernization PM roles"
+  },
+  "Yes Energy": {
+    "stage": "Private / PE-backed",
+    "funding": "Vista Equity Partners",
+    "headcount": "100–200",
+    "what_they_do": "Real-time and historical wholesale electricity market data and analytics for traders and utilities.",
+    "why_relevant": "Energy market data platform; Denver-based; applied"
+  },
+  "Bloom Energy": {
+    "stage": "Public (NYSE: BE)",
+    "funding": "Public",
+    "headcount": "3,000+",
+    "what_they_do": "Solid oxide fuel cell systems providing on-site power generation for commercial and industrial customers.",
+    "why_relevant": "DER hardware+software; large PM org"
+  },
+  "Stem": {
+    "stage": "Public (NYSE: STEM)",
+    "funding": "Public",
+    "headcount": "500–700",
+    "what_they_do": "AI-driven energy storage optimization software (Athena) for commercial solar+storage projects.",
+    "why_relevant": "Storage + AI platform; software PM focus"
+  },
+  "Fluence": {
+    "stage": "Public (NASDAQ: FLNC)",
+    "funding": "Public",
+    "headcount": "600–900",
+    "what_they_do": "Grid-scale energy storage technology and AI-driven optimization software for batteries.",
+    "why_relevant": "Storage software + AI bidding platform"
+  },
+  "Aurora Solar": {
+    "stage": "Series D",
+    "funding": "$320M+ raised",
+    "headcount": "300–500",
+    "what_they_do": "Cloud software for solar energy design, proposal generation, and project management.",
+    "why_relevant": "Solar SaaS; strong product culture; AI-augmented tools"
+  },
+  "Enverus": {
+    "stage": "Private / PE-backed",
+    "funding": "Warburg Pincus / $1B+ valuation",
+    "headcount": "1,000–1,500",
+    "what_they_do": "Energy analytics and data platform for oil & gas, power, and renewables.",
+    "why_relevant": "Denver HQ; energy data platform PM roles"
+  },
+  "ION Group": {
+    "stage": "Private / PE-backed",
+    "funding": "Vista Equity Partners",
+    "headcount": "4,000+",
+    "what_they_do": "Financial technology for commodities trading, treasury, and capital markets.",
+    "why_relevant": "Energy trading software; fintech overlap"
+  },
+  "LineVision": {
+    "stage": "Series C",
+    "funding": "$41M raised",
+    "headcount": "50–100",
+    "what_they_do": "Non-contact sensor + software platform for dynamic line rating on transmission lines.",
+    "why_relevant": "Grid data platform; applied; PM-Data Platform role"
+  },
+  "GridX": {
+    "stage": "Series B",
+    "funding": "$40M+ raised",
+    "headcount": "50–100",
+    "what_they_do": "Tariff and rate calculation engine for utilities, enabling complex pricing for EVs and DERs.",
+    "why_relevant": "Grid software infrastructure; applied"
+  },
+  "Amperon": {
+    "stage": "Series B",
+    "funding": "$20M+ raised",
+    "headcount": "30–70",
+    "what_they_do": "AI-powered electricity demand forecasting for utilities, grid operators, and energy traders.",
+    "why_relevant": "Energy AI/ML platform; small PM team = high ownership"
+  },
+  "Arcadia": {
+    "stage": "Series D",
+    "funding": "$200M+ raised",
+    "headcount": "200–400",
+    "what_they_do": "Clean energy API and community solar platform connecting consumers and businesses to renewable power.",
+    "why_relevant": "Energy API + consumer platform; software PM focus"
+  },
+  "Utilidata": {
+    "stage": "Series B",
+    "funding": "$50M+ raised",
+    "headcount": "50–100",
+    "what_they_do": "AI chip and software for real-time grid edge intelligence — deployed inside smart meters.",
+    "why_relevant": "Grid-edge AI; small team; founding-stage PM roles possible"
+  },
+  "David Energy": {
+    "stage": "Series A",
+    "funding": "$15M raised",
+    "headcount": "20–50",
+    "what_they_do": "Retail electricity provider + VPP platform offering demand response to commercial customers.",
+    "why_relevant": "VPP + retail energy; small team; high ownership"
+  },
+  "Kaluza": {
+    "stage": "Private (Octopus Energy subsidiary)",
+    "funding": "Subsidiary",
+    "headcount": "200–400",
+    "what_they_do": "EV smart charging and grid flexibility platform, spun out of Octopus Energy.",
+    "why_relevant": "EV/grid flexibility platform; strong engineering culture"
+  },
+  "Habitat Energy": {
+    "stage": "Series B",
+    "funding": "$34M raised",
+    "headcount": "50–100",
+    "what_they_do": "AI-driven battery storage optimization and trading platform for grid-scale assets.",
+    "why_relevant": "Storage + AI trading; platform PM focus"
+  },
+  "Ascend Analytics": {
+    "stage": "Private / Growth",
+    "funding": "Undisclosed",
+    "headcount": "100–200",
+    "what_they_do": "Energy market intelligence and forecasting software for utilities and renewable developers.",
+    "why_relevant": "Energy analytics; Denver-based"
+  },
+  "Stripe": {
+    "stage": "Private / Late-stage",
+    "funding": "$8.7B raised / $65B valuation",
+    "headcount": "8,000+",
+    "what_they_do": "Global payments infrastructure and developer platform.",
+    "why_relevant": "Fintech/payments overlap with Accenture work; strong PM culture"
+  },
+  "Plaid": {
+    "stage": "Private / Late-stage",
+    "funding": "$734M raised / $13B valuation",
+    "headcount": "800–1,200",
+    "what_they_do": "Financial data network connecting apps to users' bank accounts via API.",
+    "why_relevant": "Fintech API platform; Accenture payments overlap"
+  },
+  "Marqeta": {
+    "stage": "Public (NASDAQ: MQ)",
+    "funding": "Public",
+    "headcount": "700–900",
+    "what_they_do": "Modern card issuing platform and API for fintech and enterprise payment programs.",
+    "why_relevant": "Payments platform; fintech PM fit"
+  },
+  "Modern Treasury": {
+    "stage": "Series C",
+    "funding": "$183M raised",
+    "headcount": "200–350",
+    "what_they_do": "Payment operations platform and API for moving, tracking, and reconciling money.",
+    "why_relevant": "Payments infrastructure API; Accenture overlap"
+  },
+  "Samsara": {
+    "stage": "Public (NYSE: IOT)",
+    "funding": "Public",
+    "headcount": "3,000+",
+    "what_they_do": "IoT platform for fleet, equipment, and site operations — connected sensors + AI analytics.",
+    "why_relevant": "IoT + AI platform; strong PM culture; industrial overlap"
+  },
+  "Procore": {
+    "stage": "Public (NYSE: PCOR)",
+    "funding": "Public",
+    "headcount": "4,000+",
+    "what_they_do": "Construction management SaaS platform for project owners, GCs, and specialty contractors.",
+    "why_relevant": "Infrastructure software; PM-led org"
+  },
+  "LevelTen Energy": {
+    "stage": "Series C",
+    "funding": "$100M+ raised",
+    "headcount": "100–200",
+    "what_they_do": "Marketplace and analytics platform for renewable energy PPA transactions.",
+    "why_relevant": "Energy marketplace platform; software PM focus (not PPA execution)"
+  },
+  "Dandelion Energy": {
+    "stage": "Series B",
+    "funding": "$80M raised",
+    "headcount": "100–200",
+    "what_they_do": "Residential geothermal heating and cooling — hardware + software for home decarbonization.",
+    "why_relevant": "Building electrification; consumer DER product"
+  },
+  "BlocPower": {
+    "stage": "Series B",
+    "funding": "$150M+ raised",
+    "headcount": "100–300",
+    "what_they_do": "Building electrification platform targeting urban affordable housing — heat pumps, solar, EV chargers.",
+    "why_relevant": "Building decarbonization; financing + operations platform"
+  },
+  "Rhythm Energy": {
+    "stage": "Private / Growth",
+    "funding": "Undisclosed",
+    "headcount": "50–100",
+    "what_they_do": "Retail electricity provider in Texas offering renewable plans with tech-enabled customer experience.",
+    "why_relevant": "Energy retail + platform; applied"
+  },
+  "Kevala": {
+    "stage": "Series A",
+    "funding": "$21M raised",
+    "headcount": "30–70",
+    "what_they_do": "Grid data intelligence platform helping utilities understand DER interconnection capacity and load.",
+    "why_relevant": "Grid analytics + data platform; small team"
+  },
+  "UtilityAPI": {
+    "stage": "Acquired (Clean Power Research)",
+    "funding": "Acquired",
+    "headcount": "30–60",
+    "what_they_do": "API for accessing utility meter and billing data for solar, energy efficiency, and EV applications.",
+    "why_relevant": "Energy data API; DER onboarding platform"
+  },
+  "Tyba": {
+    "stage": "Seed / Early",
+    "funding": "Undisclosed",
+    "headcount": "10–30",
+    "what_they_do": "Solar project development software — site identification, permitting, and interconnection tracking.",
+    "why_relevant": "Clean energy software; early-stage ownership"
+  },
+  "Augury": {
+    "stage": "Series E",
+    "funding": "$227M raised",
+    "headcount": "400–600",
+    "what_they_do": "AI-powered machine health monitoring for industrial equipment using vibration and ultrasonic sensors.",
+    "why_relevant": "Industrial AI + IoT; platform PM roles"
+  }
+}
