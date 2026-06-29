@@ -132,6 +132,9 @@ def run(args):
             json.dump(raw_jobs, f, indent=2)
         logger.info(f"  → {len(raw_jobs)} raw jobs saved")
 
+        # ── MARKET STATS SNAPSHOT ──────────────────────────────────────────
+        _append_market_snapshot(raw_jobs)
+
     # ── 2. SCORE ──────────────────────────────────────────────────────────
     scored_path = "./output/scored_jobs.json"
 
@@ -257,6 +260,102 @@ def run(args):
         open_dashboard(scored_jobs, crm=crm)
 
     logger.info("Job Agent run complete.")
+
+
+def _append_market_snapshot(raw_jobs: list[dict]):
+    """
+    After each scrape, append a market intelligence snapshot to output/market_stats.json.
+    Tracks hiring activity per company over time so trends can be visualized.
+    """
+    stats_path = "./output/market_stats.json"
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Per-company counts
+    company_data = {}
+    for job in raw_jobs:
+        co = job.get("company", "Unknown")
+        if co not in company_data:
+            company_data[co] = {
+                "company": co,
+                "tier": job.get("company_tier", "other"),
+                "total_roles": 0,
+                "pm_roles": 0,
+                "titles": [],
+                "locations": [],
+                "work_types": [],
+                "sources": [],
+            }
+        d = company_data[co]
+        d["total_roles"] += 1
+        title = job.get("title", "")
+        pm_terms = ["product manager", "product lead", "product owner", "head of product",
+                    "director of product", "vp product", "staff pm", "principal pm", "group pm"]
+        if any(t in title.lower() for t in pm_terms):
+            d["pm_roles"] += 1
+            d["titles"].append(title)
+        d["locations"].append(job.get("location", ""))
+        d["work_types"].append(job.get("work_type", "unknown"))
+        d["sources"].append(job.get("source", ""))
+
+    # Aggregate breakdowns
+    all_pm = [j for j in raw_jobs if any(
+        t in j.get("title","").lower()
+        for t in ["product manager","product lead","product owner","head of product",
+                  "director of product","vp product","staff pm","principal pm","group pm"]
+    )]
+
+    def seniority(title: str) -> str:
+        t = title.lower()
+        if any(x in t for x in ["vp ", "vice president"]): return "VP"
+        if any(x in t for x in ["director", "head of"]): return "Director/Head"
+        if any(x in t for x in ["principal", "staff", "group pm"]): return "Principal/Staff"
+        if any(x in t for x in ["senior", "sr.","sr "]): return "Senior"
+        if any(x in t for x in ["lead"]): return "Lead"
+        return "Mid-level"
+
+    seniority_counts = {}
+    for j in all_pm:
+        s = seniority(j.get("title",""))
+        seniority_counts[s] = seniority_counts.get(s, 0) + 1
+
+    work_type_counts = {}
+    for j in all_pm:
+        wt = j.get("work_type", "unknown")
+        work_type_counts[wt] = work_type_counts.get(wt, 0) + 1
+
+    source_counts = {}
+    for j in raw_jobs:
+        src = j.get("source", "unknown")
+        source_counts[src] = source_counts.get(src, 0) + 1
+
+    snapshot = {
+        "date": today,
+        "total_jobs_scraped": len(raw_jobs),
+        "total_pm_roles": len(all_pm),
+        "companies_hiring": len(company_data),
+        "companies_with_pm_roles": sum(1 for d in company_data.values() if d["pm_roles"] > 0),
+        "seniority_breakdown": seniority_counts,
+        "work_type_breakdown": work_type_counts,
+        "source_breakdown": source_counts,
+        "companies": sorted(company_data.values(), key=lambda x: x["pm_roles"], reverse=True),
+    }
+
+    # Load existing history, append today's snapshot (replace if same date)
+    history = []
+    if os.path.exists(stats_path):
+        try:
+            with open(stats_path) as f:
+                history = json.load(f)
+        except Exception:
+            history = []
+
+    history = [s for s in history if s.get("date") != today]
+    history.append(snapshot)
+    history.sort(key=lambda s: s["date"])
+
+    with open(stats_path, "w") as f:
+        json.dump(history, f, indent=2)
+    logger.info(f"  → Market snapshot saved ({len(all_pm)} PM roles across {snapshot['companies_with_pm_roles']} companies)")
 
 
 def _print_summary(jobs: list[dict], config: dict):

@@ -234,6 +234,205 @@ def _build_jobs_tab(jobs: list, run_time: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Market Intelligence tab
+# ---------------------------------------------------------------------------
+
+def _build_market_tab(stats_path: str = "./output/market_stats.json") -> str:
+    history = []
+    if os.path.exists(stats_path):
+        try:
+            with open(stats_path) as f:
+                history = json.load(f)
+        except Exception:
+            pass
+
+    if not history:
+        return '<div style="padding:60px 32px;text-align:center;color:#475569;">No market data yet — run the agent at least once to populate stats.</div>'
+
+    latest = history[-1]
+    companies = latest.get("companies", [])
+    pm_companies = [c for c in companies if c.get("pm_roles", 0) > 0]
+
+    # ── Trend chart data ──
+    dates_js   = json.dumps([s["date"] for s in history])
+    total_js   = json.dumps([s.get("total_pm_roles", 0) for s in history])
+    scraped_js = json.dumps([s.get("total_jobs_scraped", 0) for s in history])
+
+    # ── Seniority breakdown ──
+    seniority = latest.get("seniority_breakdown", {})
+    seniority_order = ["VP", "Director/Head", "Principal/Staff", "Senior", "Lead", "Mid-level"]
+    seniority_rows = ""
+    total_pm = latest.get("total_pm_roles", 1) or 1
+    for level in seniority_order:
+        count = seniority.get(level, 0)
+        if count == 0:
+            continue
+        pct = round(count / total_pm * 100)
+        seniority_rows += f"""
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:3px;">
+            <span style="color:#cbd5e1;">{level}</span>
+            <span style="color:#64748b;">{count} ({pct}%)</span>
+          </div>
+          <div style="background:#1e2235;border-radius:4px;height:8px;">
+            <div style="background:#818cf8;height:8px;border-radius:4px;width:{pct}%;"></div>
+          </div>
+        </div>"""
+
+    # ── Work type breakdown ──
+    work_type = latest.get("work_type_breakdown", {})
+    wt_colors = {"remote": "#4ade80", "hybrid": "#fbbf24", "on-site": "#f87171", "unknown": "#475569"}
+    wt_rows = ""
+    for wt, color in wt_colors.items():
+        count = work_type.get(wt, 0)
+        if count == 0:
+            continue
+        pct = round(count / total_pm * 100)
+        wt_rows += f"""
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:3px;">
+            <span style="color:#cbd5e1;">{wt.title()}</span>
+            <span style="color:#64748b;">{count} ({pct}%)</span>
+          </div>
+          <div style="background:#1e2235;border-radius:4px;height:8px;">
+            <div style="background:{color};height:8px;border-radius:4px;width:{pct}%;"></div>
+          </div>
+        </div>"""
+
+    # ── Company table ──
+    company_rows = ""
+    for c in pm_companies:
+        titles_html = "<br>".join(f"<span style='font-size:0.75rem;color:#94a3b8;'>· {t}</span>" for t in c.get("titles", []))
+        tier = c.get("tier", "other")
+        tier_badge = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "")
+        locs = list(set(l for l in c.get("locations", []) if l))
+        loc_str = ", ".join(locs[:3]) or "—"
+        company_rows += f"""
+        <tr>
+          <td><span style="font-weight:600;color:#f1f5f9;">{tier_badge} {c['company']}</span></td>
+          <td style="text-align:center;color:#818cf8;font-weight:700;">{c['pm_roles']}</td>
+          <td style="text-align:center;color:#64748b;">{c['total_roles']}</td>
+          <td>{titles_html}</td>
+          <td style="color:#64748b;font-size:0.78rem;">{loc_str}</td>
+        </tr>"""
+
+    # ── Source breakdown ──
+    source = latest.get("source_breakdown", {})
+    source_rows = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e2235;font-size:0.82rem;">'
+        f'<span style="color:#cbd5e1;">{src}</span><span style="color:#818cf8;font-weight:600;">{cnt}</span></div>'
+        for src, cnt in sorted(source.items(), key=lambda x: -x[1])
+    )
+
+    return f"""
+<div style="padding:24px 32px;max-width:1400px;margin:0 auto;">
+
+  <!-- Top stat cards -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px;">
+    <div class="stat-card"><span class="stat-num">{latest.get('total_jobs_scraped',0)}</span><span class="stat-label">Total roles scraped</span></div>
+    <div class="stat-card"><span class="stat-num" style="color:#818cf8;">{latest.get('total_pm_roles',0)}</span><span class="stat-label">PM roles found</span></div>
+    <div class="stat-card"><span class="stat-num">{latest.get('companies_hiring',0)}</span><span class="stat-label">Companies hiring</span></div>
+    <div class="stat-card"><span class="stat-num" style="color:#4ade80;">{latest.get('companies_with_pm_roles',0)}</span><span class="stat-label">With PM openings</span></div>
+    <div class="stat-card"><span class="stat-num" style="color:#fbbf24;">{len(history)}</span><span class="stat-label">Runs tracked</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:28px;">
+
+    <!-- Trend chart -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;grid-column:span 1;">
+      <div style="font-size:0.85rem;font-weight:700;color:#94a3b8;margin-bottom:14px;">📈 PM Roles Over Time</div>
+      <canvas id="trendChart" height="160"></canvas>
+    </div>
+
+    <!-- Seniority -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;">
+      <div style="font-size:0.85rem;font-weight:700;color:#94a3b8;margin-bottom:14px;">🎓 Seniority Mix</div>
+      {seniority_rows if seniority_rows else '<div style="color:#475569;font-size:0.82rem;">No data yet</div>'}
+    </div>
+
+    <!-- Work type -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;">
+      <div style="font-size:0.85rem;font-weight:700;color:#94a3b8;margin-bottom:14px;">🌐 Work Type (PM roles)</div>
+      {wt_rows if wt_rows else '<div style="color:#475569;font-size:0.82rem;">No data yet</div>'}
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:3fr 1fr;gap:20px;">
+
+    <!-- Company table -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #2d3148;font-size:0.85rem;font-weight:700;color:#94a3b8;">
+        🏢 Companies With PM Openings ({len(pm_companies)})
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+          <thead>
+            <tr style="border-bottom:1px solid #2d3148;">
+              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Company</th>
+              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">PM Roles</th>
+              <th style="text-align:center;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">All Roles</th>
+              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Titles</th>
+              <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Location</th>
+            </tr>
+          </thead>
+          <tbody>{company_rows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Source breakdown -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;">
+      <div style="font-size:0.85rem;font-weight:700;color:#94a3b8;margin-bottom:14px;">📡 Job Sources</div>
+      {source_rows}
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function() {{
+  const ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+  new Chart(ctx, {{
+    type: 'line',
+    data: {{
+      labels: {dates_js},
+      datasets: [
+        {{
+          label: 'PM Roles',
+          data: {total_js},
+          borderColor: '#818cf8',
+          backgroundColor: 'rgba(129,140,248,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+        }},
+        {{
+          label: 'All Roles',
+          data: {scraped_js},
+          borderColor: '#4ade80',
+          backgroundColor: 'transparent',
+          borderDash: [4,4],
+          tension: 0.3,
+          pointRadius: 3,
+        }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      plugins: {{ legend: {{ labels: {{ color: '#94a3b8', font: {{ size: 11 }} }} }} }},
+      scales: {{
+        x: {{ ticks: {{ color: '#475569', font: {{ size: 10 }} }}, grid: {{ color: '#1e2235' }} }},
+        y: {{ ticks: {{ color: '#475569', font: {{ size: 10 }} }}, grid: {{ color: '#1e2235' }}, beginAtZero: true }}
+      }}
+    }}
+  }});
+}})();
+</script>"""
+
+
+# ---------------------------------------------------------------------------
 # Full HTML page
 # ---------------------------------------------------------------------------
 
@@ -246,8 +445,9 @@ def generate_dashboard(
     crm       = crm or {}
     crm_count = len(crm.get("applications", []))
 
-    jobs_tab_html = _build_jobs_tab(jobs, run_time)
-    crm_tab_html  = _build_crm_tab(crm)
+    jobs_tab_html   = _build_jobs_tab(jobs, run_time)
+    crm_tab_html    = _build_crm_tab(crm)
+    market_tab_html = _build_market_tab()
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -352,6 +552,7 @@ def generate_dashboard(
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('jobs', this)">🔍 Job Results ({len(jobs)})</button>
   <button class="tab-btn" onclick="switchTab('crm', this)">📋 Application CRM ({crm_count})</button>
+  <button class="tab-btn" onclick="switchTab('market', this)">📊 Market Intel</button>
 </div>
 
 <div id="tab-jobs" class="tab-content active">
@@ -360,6 +561,10 @@ def generate_dashboard(
 
 <div id="tab-crm" class="tab-content">
   {crm_tab_html}
+</div>
+
+<div id="tab-market" class="tab-content">
+  {market_tab_html}
 </div>
 
 <script>

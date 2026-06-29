@@ -14,7 +14,7 @@ DIGEST_EMAIL_TO = "steve.christianmba@gmail.com"
 # ---- ANTHROPIC API ----
 # Set this in your shell: export ANTHROPIC_API_KEY="sk-ant-..."
 # Or paste it here (not recommended for shared machines)
-ANTHROPIC_API_KEY = ""
+ANTHROPIC_API_KEY = ""  # leave blank to use env var
 
 # ---- GOOGLE CREDENTIALS ----
 # Path to your Google service account JSON (for Sheets + Gmail)
@@ -148,5 +148,5 @@ SCORE_WEIGHTS = {
 # ---- SCRAPER SETTINGS ----
 MAX_JOBS_PER_SOURCE = 50       # Cap per source per run
 MIN_SCORE_TO_INCLUDE = 55      # Jobs below this score are dropped
-TOP_N_FOR_EMAIL = 10           # How many jobs go in the daily digest email
+TOP_N_FOR_EMAIL = 15           # How many jobs go in the daily digest email
 DAYS_TO_KEEP_IN_SHEET = 30     # Jobs older than this get archived
