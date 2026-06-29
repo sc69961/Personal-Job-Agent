@@ -148,12 +148,12 @@ COMPANY_CAREER_URLS = {
     "Enverus":              "https://www.enverus.com/careers/",       # Energy data, Denver-based
     "Palmetto":             "https://palmetto.com/careers",           # Residential solar/battery
     "Powerflex":            "https://www.powerflex.com/careers",      # Commercial EV + solar + storage
-    "Copper Labs":          "https://www.copperlabs.com/careers",     # Home energy intelligence
+    "Copper Labs":          "https://www.copperlabs.com/careers",     # Home energy intelligence (401 errors — may be gated)
     "GridPoint":            "https://www.gridpoint.com/careers/",     # Commercial energy management
-    "WattBuy":              "https://wattbuy.com/careers",            # Energy marketplace
+    # WattBuy: removed — 404, URL dead
     "Electrify America":    "https://www.electrifyamerica.com/careers/", # EV charging
-    "OhmConnect":           "https://www.ohmconnect.com/careers",     # Demand response
-    "Enbala":               "https://www.enbala.com/careers",         # DER mgmt (Cummins/Accelera)
+    # OhmConnect: removed — 404, URL dead
+    # Enbala: removed — SSL cert expired, may be defunct
     "AutoGrid":             "https://www.auto-grid.com/careers/",     # AI for energy flexibility
 
     # --- Energy Trading ---

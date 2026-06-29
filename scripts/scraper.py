@@ -396,10 +396,26 @@ def _scrape_workable(company: str, slug: str) -> list:
                 continue
             loc_obj = job.get("location", {})
             location = loc_obj.get("city") or ("Remote" if job.get("remote") else "Unknown")
-            job_url = f"https://apply.workable.com/{slug}/j/{job.get('shortcode', '')}/"
+            shortcode = job.get("shortcode", "")
+            job_url = f"https://apply.workable.com/{slug}/j/{shortcode}/"
+
+            # The list endpoint returns stubs with no description — fetch the full JD
+            description = job.get("description", "") or ""
+            if not description and shortcode:
+                try:
+                    detail_resp = requests.get(
+                        f"https://apply.workable.com/api/v3/accounts/{slug}/jobs/{shortcode}",
+                        timeout=10,
+                    )
+                    if detail_resp.status_code == 200:
+                        detail = detail_resp.json()
+                        description = detail.get("description", "") or detail.get("content", "") or ""
+                except Exception:
+                    pass
+
             jobs.append(make_job(
                 title=title, company=company, location=location,
-                url=job_url, description=job.get("description", "")[:3000],
+                url=job_url, description=description[:3000],
                 source="company_site",
             ))
         logger.info(f"{company} (Workable): {len(jobs)} PM roles")
