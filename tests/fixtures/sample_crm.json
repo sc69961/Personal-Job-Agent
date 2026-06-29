@@ -1,0 +1,61 @@
+{
+  "applications": [
+    {
+      "id": "85c13fe1ec",
+      "job_title": "Senior Product Manager, Residential Business",
+      "company": "Omnidian",
+      "job_url": "https://jobs.lever.co/omnidian/abc123",
+      "applied_date": "2026-06-25",
+      "status": "offer",
+      "status_label": "Offer Received",
+      "last_activity": "2026-06-25",
+      "follow_up_date": "",
+      "recommended_action": "Evaluate offer terms carefully.",
+      "notes": "",
+      "thread_ids": ["19efd09621bf4a81"]
+    },
+    {
+      "id": "c1842cc3f9",
+      "job_title": "Senior Product Manager - Predictive Controls",
+      "company": "Uplight",
+      "job_url": "",
+      "applied_date": "",
+      "status": "interview_requested",
+      "status_label": "Interview Requested",
+      "last_activity": "2026-06-22",
+      "follow_up_date": "2026-06-29",
+      "recommended_action": "Prepare for next interview round.",
+      "notes": "",
+      "thread_ids": ["19ebc9fb5eec550e"]
+    },
+    {
+      "id": "stale_001",
+      "job_title": "Product Manager",
+      "company": "Stale Company",
+      "job_url": "",
+      "applied_date": "2026-04-01",
+      "status": "applied",
+      "status_label": "Applied",
+      "last_activity": "2026-04-01",
+      "follow_up_date": "2026-04-10",
+      "recommended_action": "Follow up.",
+      "notes": "",
+      "thread_ids": ["abc001"]
+    },
+    {
+      "id": "voltus_001",
+      "job_title": "Product Manager",
+      "company": "Voltus Inc.",
+      "job_url": "https://voltus.co/jobs",
+      "applied_date": "",
+      "status": "interview_requested",
+      "status_label": "Interview Requested",
+      "last_activity": "2026-05-27",
+      "follow_up_date": "",
+      "recommended_action": "Follow up with recruiter.",
+      "notes": "",
+      "thread_ids": ["volt001", "volt002"]
+    }
+  ],
+  "last_synced": "2026-06-27T00:00:00.000000"
+}

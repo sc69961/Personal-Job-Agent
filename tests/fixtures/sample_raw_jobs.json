@@ -1,0 +1,122 @@
+[
+  {
+    "id": "job_001",
+    "title": "Senior Product Manager",
+    "company": "Uplight",
+    "location": "Denver, CO (Remote)",
+    "url": "https://jobs.jobvite.com/uplight/job/senior-pm",
+    "description": "Own the product strategy for our demand response platform. Lead cross-functional teams to build 0-to-1 features for utility partners. You will define the roadmap for our DER orchestration products.",
+    "source": "company_site",
+    "salary_text": "$170,000 - $210,000",
+    "work_type": "remote",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_002",
+    "title": "Staff Product Manager - VPP Platform",
+    "company": "Voltus",
+    "location": "Remote",
+    "url": "https://www.voltus.co/jobs/staff-pm",
+    "description": "Lead product strategy for our virtual power plant aggregation platform. Own roadmap from ideation to launch across demand response, grid services, and market participation.",
+    "source": "company_site",
+    "salary_text": "$200,000 - $240,000",
+    "work_type": "remote",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_003",
+    "title": "Junior Product Manager",
+    "company": "Arcadia",
+    "location": "Remote",
+    "url": "https://arcadia.com/careers/junior-pm",
+    "description": "Entry level PM role supporting our energy marketplace product team.",
+    "source": "linkedin",
+    "salary_text": "$80,000 - $100,000",
+    "work_type": "remote",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_004",
+    "title": "Associate Product Manager",
+    "company": "Bloom Energy",
+    "location": "San Jose, CA",
+    "url": "https://bloomenergy.com/careers/apm",
+    "description": "APM program for recent graduates. Rotational product role.",
+    "source": "linkedin",
+    "salary_text": "$90,000 - $110,000",
+    "work_type": "on-site",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_005",
+    "title": "Senior Product Manager",
+    "company": "Optum",
+    "location": "Remote",
+    "url": "https://optum.com/careers/senior-pm",
+    "description": "Lead product for our revenue cycle automation platform. Healthcare experience required. FDA regulatory knowledge preferred.",
+    "source": "linkedin",
+    "salary_text": "$160,000 - $190,000",
+    "work_type": "remote",
+    "company_tier": "other"
+  },
+  {
+    "id": "job_006",
+    "title": "Director of Product Management",
+    "company": "Crusoe Energy",
+    "location": "Denver, CO",
+    "url": "https://crusoe.com/careers/director",
+    "description": "Lead commercialization of our utility-scale generation portfolio. Negotiate PPAs and offtake agreements with utility counterparties. Manage EPC contractors and oversee project finance for grid-scale assets. Technoeconomic modeling required.",
+    "source": "linkedin",
+    "salary_text": "$220,000 - $280,000",
+    "work_type": "hybrid",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_007",
+    "title": "Senior Product Manager - Flight Connectivity",
+    "company": "Hopper",
+    "location": "Remote",
+    "url": "https://hopper.com/careers/pm-flight-1",
+    "description": "Own the flight connectivity product at Hopper, a consumer travel app.",
+    "source": "linkedin",
+    "salary_text": "$150,000 - $180,000",
+    "work_type": "remote",
+    "company_tier": "other"
+  },
+  {
+    "id": "job_008",
+    "title": "Senior Product Manager - Flight Connectivity",
+    "company": "Hopper",
+    "location": "Remote",
+    "url": "https://hopper.com/careers/pm-flight-1",
+    "description": "Own the flight connectivity product at Hopper, a consumer travel app.",
+    "source": "linkedin",
+    "salary_text": "$150,000 - $180,000",
+    "work_type": "remote",
+    "company_tier": "other"
+  },
+  {
+    "id": "job_009",
+    "title": "Product Manager - On-site New York Only",
+    "company": "ION Group",
+    "location": "New York, NY",
+    "url": "https://jobs.lever.co/ion/pm-nyc",
+    "description": "Must be located in New York only. No remote. Join our commodities trading software team.",
+    "source": "company_site",
+    "salary_text": "$140,000 - $170,000",
+    "work_type": "on-site",
+    "company_tier": "climatetech"
+  },
+  {
+    "id": "job_010",
+    "title": "Head of Product",
+    "company": "Enode",
+    "location": "Remote (US)",
+    "url": "https://enode.com/careers/head-of-product",
+    "description": "Be our founding product leader. Define product strategy for our DER API platform. You will be our first PM hire, building the function from scratch.",
+    "source": "company_site",
+    "salary_text": "",
+    "work_type": "remote",
+    "company_tier": "climatetech"
+  }
+]
