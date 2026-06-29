@@ -70,8 +70,75 @@ def job_card_html(job: dict, rank: int) -> str:
     </div>"""
 
 
-def build_digest_html(jobs: list[dict], run_date: str, total_scraped: int) -> str:
+def pipeline_summary_html(crm: dict) -> str:
+    """Build a compact pipeline snapshot from the CRM dict."""
+    apps = crm.get("applications", []) if crm else []
+    if not apps:
+        return ""
+
+    status_counts = {}
+    for a in apps:
+        s = a.get("status", "applied")
+        status_counts[s] = status_counts.get(s, 0) + 1
+
+    active       = sum(status_counts.get(s, 0) for s in ("applied", "response_received", "interview_requested"))
+    interviews   = status_counts.get("interview_requested", 0)
+    offers       = status_counts.get("offer", 0)
+    ghosted      = status_counts.get("ghosted", 0)
+    total_sent   = len(apps) - status_counts.get("ghosted", 0)
+    response_ct  = sum(status_counts.get(s, 0) for s in ("response_received", "interview_requested", "offer"))
+    response_pct = round(response_ct / total_sent * 100) if total_sent else 0
+
+    # Applications needing follow-up today
+    from datetime import datetime as dt
+    today = dt.now().strftime("%Y-%m-%d")
+    followups = [
+        a["company"] for a in apps
+        if a.get("follow_up_date") and a.get("follow_up_date") <= today
+        and a.get("status") not in ("ghosted", "rejected", "withdrawn", "offer")
+    ]
+    followup_html = ""
+    if followups:
+        items = "".join(f"<li style='margin:2px 0;'>{c}</li>" for c in followups[:5])
+        more  = f" <span style='color:#888'>+{len(followups)-5} more</span>" if len(followups) > 5 else ""
+        followup_html = f"""
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dde3ea;">
+          <div style="font-size:12px;font-weight:bold;color:#7a3a1a;margin-bottom:4px;">📅 Follow up today:</div>
+          <ul style="font-size:12px;margin:0;padding-left:18px;color:#555;">{items}</ul>{more}
+        </div>"""
+
+    return f"""
+    <div style="background:#fff;border:1px solid #dde3ea;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:bold;color:#1a3a5c;margin-bottom:10px;">📊 Pipeline Snapshot</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <div style="text-align:center;min-width:60px;">
+          <div style="font-size:22px;font-weight:bold;color:#1a3a5c;">{active}</div>
+          <div style="font-size:11px;color:#888;">Active</div>
+        </div>
+        <div style="text-align:center;min-width:60px;">
+          <div style="font-size:22px;font-weight:bold;color:#1a7a3a;">{interviews}</div>
+          <div style="font-size:11px;color:#888;">Interviews</div>
+        </div>
+        <div style="text-align:center;min-width:60px;">
+          <div style="font-size:22px;font-weight:bold;color:#7a3a9a;">{offers}</div>
+          <div style="font-size:11px;color:#888;">Offers</div>
+        </div>
+        <div style="text-align:center;min-width:60px;">
+          <div style="font-size:22px;font-weight:bold;color:#1a5f7a;">{response_pct}%</div>
+          <div style="font-size:11px;color:#888;">Response rate</div>
+        </div>
+        <div style="text-align:center;min-width:60px;">
+          <div style="font-size:22px;font-weight:bold;color:#aaa;">{ghosted}</div>
+          <div style="font-size:11px;color:#888;">Ghosted</div>
+        </div>
+      </div>
+      {followup_html}
+    </div>"""
+
+
+def build_digest_html(jobs: list[dict], run_date: str, total_scraped: int, crm: dict = None) -> str:
     cards = "".join(job_card_html(job, i+1) for i, job in enumerate(jobs))
+    pipeline = pipeline_summary_html(crm or {})
     return f"""
 <!DOCTYPE html>
 <html>
@@ -88,6 +155,7 @@ def build_digest_html(jobs: list[dict], run_date: str, total_scraped: int) -> st
 
     <!-- Body -->
     <div style="padding:20px 16px;">
+      {pipeline}
       {cards}
     </div>
 
@@ -124,6 +192,7 @@ def send_digest(
     config: dict,
     total_scraped: int,
     credentials_path: str,
+    crm: dict = None,
 ) -> bool:
     """
     Send the daily digest email via Gmail API (OAuth2).
@@ -138,7 +207,7 @@ def send_digest(
     run_date = datetime.now().strftime("%b %-d, %Y")
     top_jobs = jobs[:config.get("TOP_N_FOR_EMAIL", 10)]
 
-    html_body = build_digest_html(top_jobs, run_date, total_scraped)
+    html_body = build_digest_html(top_jobs, run_date, total_scraped, crm=crm)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"🎯 Job Digest {run_date} — Top {len(top_jobs)} matches"

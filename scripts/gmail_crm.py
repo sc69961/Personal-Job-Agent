@@ -35,8 +35,11 @@ GMAIL_SEARCH_QUERIES = [
 
 # Status priority — higher index wins when merging
 STATUS_PRIORITY = [
-    "applied", "response_received", "interview_requested", "offer", "withdrawn", "rejected"
+    "applied", "response_received", "interview_requested", "offer", "withdrawn", "rejected", "ghosted"
 ]
+
+# Days of silence after which an "applied" entry is considered ghosted
+GHOST_AFTER_DAYS = 30
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +328,23 @@ def sync_gmail_crm(config: dict) -> dict:
 
         except Exception as e:
             logger.error(f"Gmail CRM query failed: {e}")
+
+    # Auto-ghost: mark "applied" entries with no activity for 30+ days
+    ghosted_count = 0
+    cutoff = (datetime.now() - timedelta(days=GHOST_AFTER_DAYS)).strftime("%Y-%m-%d")
+    for app in crm["applications"]:
+        if app.get("status") == "applied":
+            last = app.get("last_activity", "")
+            if last and last < cutoff:
+                app["status"]             = "ghosted"
+                app["status_label"]       = "Ghosted"
+                app["recommended_action"] = (
+                    "No response after 30+ days — safe to consider closed. "
+                    "Move on or send a brief reconnect if there's a strong relationship."
+                )
+                ghosted_count += 1
+    if ghosted_count:
+        logger.info(f"  → Auto-ghosted {ghosted_count} stale applications (no activity > {GHOST_AFTER_DAYS} days)")
 
     # Sort by last_activity descending
     crm["applications"].sort(key=lambda a: a.get("last_activity", ""), reverse=True)

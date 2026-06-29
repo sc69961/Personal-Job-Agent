@@ -241,6 +241,7 @@ def run(args):
                 config=config,
                 total_scraped=len(raw_jobs),
                 credentials_path=config["GOOGLE_CREDENTIALS_PATH"],
+                crm=crm,
             )
             if ok:
                 with open(email_flag_path, "w") as f:
