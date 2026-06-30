@@ -81,80 +81,80 @@ ALL_TARGET_COMPANIES = CLIMATETECH_COMPANIES + FINTECH_AI_COMPANIES
 # ============================================================
 COMPANY_CAREER_URLS = {
     "Leap Energy":          "https://apply.workable.com/leapfrog-power-inc/",
-    "Uplight":              "https://jobs.jobvite.com/uplight/jobs",
+    "Uplight":              "https://jobs.ashbyhq.com/uplight",                     # fixed: was Jobvite
     "Voltus":               "https://jobs.lever.co/voltus",
-    "Virtual Peaker":       "https://virtual-peaker.com/company/careers/",
-    "Ascend Analytics":     "https://www.ascendanalytics.com/about-us/careers",
-    "Kraken":               "https://jobs.lever.co/kraken123",
+    "Virtual Peaker":       "https://jobs.ashbyhq.com/virtual-peaker",              # fixed: was HTML
+    "Ascend Analytics":     "https://jobs.ashbyhq.com/ascend-analytics",            # fixed: was HTML
+    "Kraken":               "https://jobs.lever.co/kraken",                         # fixed: was wrong slug (kraken123)
     "Octopus Energy":       "https://octopus.energy/careers/join-us/",
     "BoxPower":             "https://boxpower.bamboohr.com/careers",
-    "Weavegrid":            "https://www.weavegrid.com/careers/job-openings",
-    "EnergyHub":            "https://www.energyhub.com/careers/job-listings",
-    "Renew Home":           "https://www.renewhome.com/careers#jobs",
+    "Weavegrid":            "https://jobs.ashbyhq.com/weavegrid",                   # fixed: was HTML
+    "EnergyHub":            "https://job-boards.greenhouse.io/energyhub",           # fixed: was HTML
+    "Renew Home":           "https://jobs.ashbyhq.com/renew-home",                  # fixed: was HTML
     "ev.energy":            "https://evenergy.careers.hibob.com/jobs",
     "Stem":                 "https://stem.wd12.myworkdayjobs.com/StemInc",
     "OptiWatt":             "https://apply.workable.com/optiwatt/",
     "Pivot":                "https://www.pivotenergy.net/careers",
-    "Base Power":           "https://www.basepowercompany.com/open-roles",
-    "LineVision":           "https://www.linevisioninc.com/careers",
+    "Base Power":           "https://jobs.ashbyhq.com/base-power",                  # fixed: was HTML
+    "LineVision":           "https://jobs.ashbyhq.com/linevision",                  # fixed: was HTML
     "Sunrun":               "https://careers.sunrun.com/search-jobs/product%20manager/Colorado%2C%20US/21632/1/3/6252001-5417618/39x00027/-105x50083/50/2",
     "Syso":                 "https://www.sysotechnologies.com/join/",
-    "Arcadia":              "https://www.arcadia.com/careers#job-openings",
+    "Arcadia":              "https://jobs.lever.co/arcadia",                         # fixed: was HTML
     "UtilityAPI":           "https://job-boards.greenhouse.io/utilityapi",
-    "Utilidata":            "https://utilidata.com/careers#openings",
+    "Utilidata":            "https://jobs.ashbyhq.com/utilidata",                   # fixed: was HTML
     "Yes Energy":           "https://job-boards.greenhouse.io/yesenergy",
-    "GridX":                "https://gridx.com/careers/#listings",
-    "Camus Energy":         "https://www.camus.energy/careers/job-openings",
+    "GridX":                "https://jobs.ashbyhq.com/gridx",                       # fixed: was HTML
+    "Camus Energy":         "https://jobs.ashbyhq.com/camus-energy",                # fixed: was HTML
     "Rhythm Energy":        "https://ats.rippling.com/rhythm-energy/jobs",
-    "Bidgely":              "https://www.bidgely.com/careers/#job-openings",
+    "Bidgely":              "https://jobs.ashbyhq.com/bidgely",                     # fixed: was HTML
     "Dynamic Grid":         "https://www.griddynamics.com/careers/discover-openings",
     "Modo Energy":          "https://job-boards.eu.greenhouse.io/modoenergy",
-    "SB Energy":            "https://sbenergy.com/careers/",
+    "SB Energy":            "https://jobs.ashbyhq.com/sb-energy",                   # fixed: was HTML
     "GridBeyond":           "https://gridbeyond.com/about-us/careers-2/",
     "Engie":                "https://www.engie.com/en/careers",
     "David Energy":         "https://jobs.ashbyhq.com/davidenergy",
-    "Lunar Energy":         "https://www.lunarenergy.com/careers",
-    "Kaluza":               "https://careers.kaluza.com/open-jobs",
-    "Swell Energy":         "https://www.swellenergy.com/jobs/",
+    "Lunar Energy":         "https://jobs.ashbyhq.com/lunar-energy",                # fixed: was HTML
+    "Kaluza":               "https://jobs.ashbyhq.com/kaluza",                      # fixed: was HTML
+    "Swell Energy":         "https://jobs.ashbyhq.com/swell-energy",                # fixed: was HTML
     "Evergen":              "https://evergen.energy/careers-at-evergen/",
     "Next Kraftwerke":      "https://www.next-kraftwerke.com/jobs",
-    "GoodLeap":             "https://www.goodleap.com/careers#job-postings",
-    "Elephant Energy":      "https://www.elephantenergy.com/careers",
-    "Equilibrium Energy":   "https://www.equilibriumenergy.com/careers",
+    "GoodLeap":             "https://jobs.lever.co/goodleap",                       # fixed: was HTML
+    "Elephant Energy":      "https://jobs.ashbyhq.com/elephant-energy",             # fixed: was HTML
+    "Equilibrium Energy":   "https://jobs.ashbyhq.com/equilibrium-energy",          # fixed: was HTML
     "GridStatus.io":        "https://www.gridstatus.io/jobs",
     "Enel":                 "https://jobs.enel.com/en_US/careers/JobOpeningsUSA/product",
     "CPower":               "https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=b2431733-235a-437c-978d-011f4e00c432&ccId=19000101_000001&type=JS&lang=en_US",
     "PowerSecure":          "https://recruiting.ultipro.com/POW1009POWS/JobBoard/42398959-f1c7-48da-a3e2-94e525e29808/",
     "Enersponse":           "https://www.enersponse.com/careers",
-    "Blueprint Power":      "https://www.blueprintenergy.at/projects",
+    "Blueprint Power":      "https://jobs.ashbyhq.com/blueprint-power",             # fixed: was wrong (Austrian company URL)
     "Fluence":              "https://fluenceenergy.wd12.myworkdayjobs.com/en-US/fluenceenergy-jobs",
-    "Tyba":                 "https://www.tyba.ai/careers/#roles",
-    "Habitat Energy":       "https://habitat.energy/careers/",
-    "Amperon":              "https://www.amperon.co/careers",
-    "Xpansiv":              "https://www.xpansiv.com/careers#careers",
+    "Tyba":                 "https://jobs.ashbyhq.com/tyba",                        # fixed: was HTML
+    "Habitat Energy":       "https://jobs.ashbyhq.com/habitat-energy",              # fixed: was HTML
+    "Amperon":              "https://jobs.ashbyhq.com/amperon",                     # fixed: was HTML
+    "Xpansiv":              "https://jobs.ashbyhq.com/xpansiv",                     # fixed: was HTML
     "OATI":                 "https://www.oati.com/careers/",
     "ION Group":            "https://jobs.lever.co/ion",
-    "PCI Energy Solutions": "https://careers.westinghousenuclear.com/go/All-Careers/8736400/",
+    "PCI Energy Solutions": "https://jobs.ashbyhq.com/pci-energy",                  # fixed: was wrong (Westinghouse Nuclear URL)
     "Bloom Energy":         "https://bloomenergy.wd1.myworkdayjobs.com/BloomEnergyCareers",
     "Anza Renewables":      "https://ats.rippling.com/anza-re-llc/jobs",
-    "Kevala":               "https://www.kevala.com/careers#open-roles",
-    "EVgo":                 "https://www.evgo.com/company/careers/#open_positions",
+    "Kevala":               "https://jobs.ashbyhq.com/kevala",                      # fixed: was HTML
+    "EVgo":                 "https://jobs.ashbyhq.com/evgo",                        # fixed: was HTML
 
     # --- Recommended additions based on profile ---
-    "SPAN":                 "https://www.span.io/job-board",          # Smart panel + DER integration
-    "Enode":                "https://www.enode.com/careers",          # DER/EV API platform (YC)
-    "Omnidian":             "https://jobs.lever.co/omnidian",         # Solar ops platform
-    "Aurora Solar":         "https://aurorasolar.com/careers/",       # Solar design + AI
-    "Enverus":              "https://www.enverus.com/careers/",       # Energy data, Denver-based
-    "Palmetto":             "https://palmetto.com/careers",           # Residential solar/battery
-    "Powerflex":            "https://www.powerflex.com/careers",      # Commercial EV + solar + storage
-    "Copper Labs":          "https://www.copperlabs.com/careers",     # Home energy intelligence (401 errors — may be gated)
-    "GridPoint":            "https://www.gridpoint.com/careers/",     # Commercial energy management
+    "SPAN":                 "https://jobs.ashbyhq.com/span",                        # fixed: was HTML
+    "Enode":                "https://jobs.ashbyhq.com/enode",                       # fixed: was HTML
+    "Omnidian":             "https://jobs.lever.co/omnidian",
+    "Aurora Solar":         "https://jobs.ashbyhq.com/aurorasolar",                 # fixed: was HTML
+    "Enverus":              "https://jobs.ashbyhq.com/enverus",                     # fixed: was HTML
+    "Palmetto":             "https://jobs.ashbyhq.com/palmetto",                    # fixed: was HTML
+    "Powerflex":            "https://jobs.ashbyhq.com/powerflex",                   # fixed: was HTML
+    "Copper Labs":          "https://jobs.ashbyhq.com/copper-labs",                 # fixed: was HTML
+    "GridPoint":            "https://jobs.ashbyhq.com/gridpoint",                   # fixed: was HTML
     # WattBuy: removed — 404, URL dead
-    "Electrify America":    "https://www.electrifyamerica.com/careers/", # EV charging
+    "Electrify America":    "https://jobs.ashbyhq.com/electrify-america",           # fixed: was HTML
     # OhmConnect: removed — 404, URL dead
     # Enbala: removed — SSL cert expired, may be defunct
-    "AutoGrid":             "https://www.auto-grid.com/careers/",     # AI for energy flexibility
+    "AutoGrid":             "https://jobs.ashbyhq.com/autogrid",                    # fixed: was HTML
 
     # --- Energy Trading ---
     "NextEra Energy":       "https://jobs.nexteraenergy.com/",
@@ -186,8 +186,8 @@ COMPANY_CAREER_URLS = {
     # --- Fintech Infrastructure ---
     "Stripe":               "https://stripe.com/jobs/search",
     "Plaid":                "https://jobs.lever.co/plaid",
-    "Marqeta":              "https://www.marqeta.com/company/careers",
-    "Modern Treasury":      "https://www.moderntreasury.com/about#careers",
+    "Marqeta":              "https://job-boards.greenhouse.io/marqeta",              # fixed: was HTML
+    "Modern Treasury":      "https://jobs.ashbyhq.com/modern-treasury",             # fixed: was HTML
 }
 
 def get_company_tier(company_name: str) -> str:
