@@ -8,6 +8,7 @@ import re
 import json
 import pickle
 import hashlib
+from typing import Optional
 import base64
 import logging
 from datetime import datetime, timedelta
@@ -65,7 +66,7 @@ def _app_id(company: str, job_title: str) -> str:
     return hashlib.md5(f"{norm_co}_{norm_title}".encode()).hexdigest()[:10]
 
 
-def _find_existing_by_company(company: str, app_by_id: dict) -> dict | None:
+def _find_existing_by_company(company: str, app_by_id: dict) -> Optional[dict]:
     """
     Find an existing CRM entry by normalized company name match.
     Used to catch status updates that arrive in separate email threads.

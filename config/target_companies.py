@@ -82,7 +82,7 @@ ALL_TARGET_COMPANIES = CLIMATETECH_COMPANIES + FINTECH_AI_COMPANIES
 COMPANY_CAREER_URLS = {
     "Leap Energy":          "https://apply.workable.com/leapfrog-power-inc/",
     "Uplight":              "https://jobs.jobvite.com/uplight/jobs",
-    "Voltus":               "https://www.voltus.co/jobs",
+    "Voltus":               "https://jobs.lever.co/voltus",
     "Virtual Peaker":       "https://virtual-peaker.com/company/careers/",
     "Ascend Analytics":     "https://www.ascendanalytics.com/about-us/careers",
     "Kraken":               "https://jobs.lever.co/kraken123",

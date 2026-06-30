@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 _JUNIOR_SIGNALS = [
     "junior", "associate product manager", "apm ", "entry level",
-    "entry-level", "internship", "intern ", " intern,", "coordinator",
+    "entry-level", "internship", "intern ", " intern,", " intern", "coordinator",
     "analyst i ", "analyst i,",
 ]
 
@@ -29,24 +29,86 @@ _ONSITE_SIGNALS = [
     "austin only", "no remote",
 ]
 
+# Non-USA location signals — any of these in the location field → drop immediately
+_INTERNATIONAL_SIGNALS = [
+    # Europe
+    "spain", "madrid", "barcelona", "uk", "united kingdom", "london", "england",
+    "germany", "berlin", "munich", "france", "paris", "netherlands", "amsterdam",
+    "ireland", "dublin", "sweden", "stockholm", "denmark", "copenhagen",
+    "norway", "oslo", "finland", "helsinki", "switzerland", "zurich",
+    "portugal", "lisbon", "italy", "rome", "milan", "poland", "warsaw",
+    "czech", "prague", "romania", "bucharest", "austria", "vienna",
+    # Americas (non-US)
+    "canada", "toronto", "vancouver", "montreal", "ottawa", "calgary",
+    "mexico", "brazil", "argentina", "colombia", "chile",
+    # Asia-Pacific
+    "india", "bangalore", "hyderabad", "mumbai", "delhi", "pune",
+    "singapore", "japan", "tokyo", "osaka", "china", "beijing", "shanghai",
+    "shenzhen", "australia", "sydney", "melbourne", "brisbane", "new zealand",
+    "south korea", "seoul", "taiwan", "taipei", "hong kong",
+    # Broad regions
+    "emea", "apac", ", uk", ", canada", ", india", ", australia",
+    "latin america", "europe", "asia pacific", "asia-pacific",
+]
+
+# Remote/hybrid signals — if any of these appear, the job is location-flexible
+_REMOTE_SIGNALS = [
+    "remote", "hybrid", "work from home", "wfh", "distributed",
+    "anywhere in the us", "anywhere in us", "flexible location",
+]
+
+# Generic US / no-location signals — pass through (let Claude score)
+_USA_GENERIC = [
+    "united states", "usa", "u.s.a", "u.s.", "nationwide", "us only",
+    "anywhere", "multiple locations", "various locations",
+]
+
+# Cities/areas within ~30 miles of Denver
+_DENVER_METRO = [
+    "denver", "boulder", "broomfield", "aurora", "lakewood", "westminster",
+    "arvada", "englewood", "littleton", "golden", "centennial", "parker",
+    "castle rock", "highlands ranch", "thornton", "northglenn", "commerce city",
+    "lone tree", "erie", "louisville", "lafayette", "superior", "wheat ridge",
+    "federal heights", "edgewater", "sheridan",
+    # State-level (CO → remote or Denver-area)
+    "colorado", " co,", " co ", "(co)", ", co",
+]
+
+
 def pre_filter(job: dict, config: dict) -> tuple:
     """
     Fast Python-only filter before spending any Claude tokens.
     Returns (should_score: bool, reason: str).
     """
-    title = job.get("title", "").lower()
-    desc  = (job.get("description", "") + " " + job.get("location", "")).lower()
+    title    = job.get("title", "").lower()
+    location = job.get("location", "").lower()
+    desc     = (job.get("description", "") + " " + location).lower()
 
     # Drop junior/non-PM roles
     for signal in _JUNIOR_SIGNALS:
         if signal in title:
             return False, f"junior signal in title: '{signal}'"
 
-    # Drop clearly on-site roles outside allowed locations
-    allowed = [loc.lower() for loc in config.get("ALLOWED_LOCATIONS", [])]
+    # --- Location filtering ---
+
+    # 1. Drop international jobs outright (location field is most reliable signal)
+    if any(sig in location for sig in _INTERNATIONAL_SIGNALS):
+        return False, f"international location: {location.strip()}"
+
+    # 2. If no remote/hybrid signal anywhere, job must be in Denver metro
+    has_remote  = any(sig in desc for sig in _REMOTE_SIGNALS)
+    is_generic  = not location or any(sig in location for sig in _USA_GENERIC)
+    is_denver   = any(sig in location for sig in _DENVER_METRO)
+
+    if not has_remote and not is_generic and not is_denver:
+        # Has a specific US location that isn't Denver-adjacent and isn't remote
+        return False, f"on-site, not in Denver metro: {location.strip()}"
+
+    # 3. Legacy description-based onsite check (catches "onsite only" in JD text)
     if any(sig in desc for sig in _ONSITE_SIGNALS):
+        allowed = [loc.lower() for loc in config.get("ALLOWED_LOCATIONS", [])]
         if not any(loc in desc for loc in allowed):
-            return False, "on-site only, outside allowed locations"
+            return False, "on-site only signal in JD, outside allowed locations"
 
     # Drop if salary is explicitly listed and clearly below floor
     salary_floor = config.get("SALARY_FLOOR", 0)
@@ -57,7 +119,7 @@ def pre_filter(job: dict, config: dict) -> tuple:
         if nums:
             try:
                 top = max(int(n.replace(",", "")) * (1000 if "k" in salary_text else 1) for n in nums)
-                if top < salary_floor * 0.7:   # only drop if clearly below (70% of floor)
+                if top < salary_floor * 0.7:
                     return False, f"salary {top} clearly below floor {salary_floor}"
             except Exception:
                 pass

@@ -289,7 +289,7 @@ _PM_KEYWORDS = [
     "director of product", "director, product",
     "head of product",
     "vp of product", "vp, product", "vice president of product", "vice president, product",
-    "principal product", "staff product", "group product",
+    "principal product", "principal pm", "staff product", "group product",
     "product lead", "product owner",
     "chief product", "cpo",
 ]

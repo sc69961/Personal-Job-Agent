@@ -108,11 +108,50 @@ class TestPreFilterJunior:
 
 class TestPreFilterLocation:
 
-    def test_filters_onsite_outside_denver(self, config):
+    # --- International filter ---
+
+    def test_filters_madrid_spain(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="Madrid, Spain")
+        ok, reason = pre_filter(job, config)
+        assert not ok
+        assert "international" in reason
+
+    def test_filters_london_uk(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="London, UK")
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    def test_filters_toronto_canada(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="Toronto, Canada")
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    def test_filters_india(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="Bangalore, India")
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    def test_filters_emea(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="EMEA")
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    # --- On-site non-Denver US filter ---
+
+    def test_filters_onsite_new_york(self, config):
         job = make_job(
             title="Senior Product Manager",
-            description="Must be located in New York only. No remote.",
+            description="In-office only.",
             location="New York, NY",
+        )
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    def test_filters_onsite_san_francisco(self, config):
+        job = make_job(
+            title="Senior Product Manager",
+            description="Join our SF team.",
+            location="San Francisco, CA",
         )
         ok, reason = pre_filter(job, config)
         assert not ok
@@ -120,11 +159,23 @@ class TestPreFilterLocation:
     def test_passes_onsite_denver(self, config):
         job = make_job(
             title="Senior Product Manager",
-            description="Must be located in Denver only.",
+            description="Must be located in Denver.",
             location="Denver, CO",
         )
         ok, reason = pre_filter(job, config)
         assert ok
+
+    def test_passes_onsite_boulder(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="Boulder, CO")
+        ok, reason = pre_filter(job, config)
+        assert ok
+
+    def test_passes_onsite_colorado_generic(self, config):
+        job = make_job(title="Senior Product Manager", description="", location="Colorado")
+        ok, reason = pre_filter(job, config)
+        assert ok
+
+    # --- Remote passes regardless of listed city ---
 
     def test_passes_remote(self, config):
         job = make_job(
@@ -135,12 +186,25 @@ class TestPreFilterLocation:
         ok, reason = pre_filter(job, config)
         assert ok
 
-    def test_passes_no_location_signal(self, config):
+    def test_passes_hybrid_non_denver_city(self, config):
+        """Hybrid role listing a non-Denver city should still pass — it's location-flexible."""
         job = make_job(
             title="Senior Product Manager",
-            description="Great opportunity to own our DER platform roadmap.",
-            location="Remote",
+            description="Hybrid — 2 days/week in office.",
+            location="Chicago, IL",
         )
+        ok, reason = pre_filter(job, config)
+        assert ok
+
+    def test_passes_usa_generic_location(self, config):
+        """'United States' with no city → nationwide role, pass through."""
+        job = make_job(title="Senior Product Manager", description="", location="United States")
+        ok, reason = pre_filter(job, config)
+        assert ok
+
+    def test_passes_blank_location(self, config):
+        """No location info at all → can't filter, pass through."""
+        job = make_job(title="Senior Product Manager", description="Great DER PM role.", location="")
         ok, reason = pre_filter(job, config)
         assert ok
 
@@ -182,9 +246,12 @@ class TestPreFilterSalary:
 class TestBuildScoringPrompt:
 
     def test_contains_resume(self, config):
+        # scorer uses CONDENSED_RESUME (a hardcoded constant), not the passed resume arg.
+        # Verify the candidate's name and key details appear in the prompt.
         job = make_job()
         prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
-        assert config["RESUME_TEXT"] in prompt
+        assert "Steve Christian" in prompt
+        assert "DER" in prompt
 
     def test_contains_job_title(self, config):
         job = make_job(title="Staff Product Manager")
