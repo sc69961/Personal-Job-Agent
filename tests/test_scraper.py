@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.scraper import _is_pm_role, _detect_ats
+from scripts.scraper import _is_pm_role, _detect_ats, _extract_salary_from_text
 
 
 # ---------------------------------------------------------------------------
@@ -203,3 +203,51 @@ class TestUrlDeduplication:
         assert len(result) == 3
         ids = [j["id"] for j in result]
         assert "c" not in ids
+
+
+# ---------------------------------------------------------------------------
+# _extract_salary_from_text — salary parsing from description text
+# ---------------------------------------------------------------------------
+
+class TestExtractSalaryFromText:
+
+    def test_lever_style_compensation_block(self):
+        """Regression: Voltus Lever posting — 'Compensation\\n120,000 – 135,000 / year'"""
+        text = "About the role...\n\nCompensation\n120,000 – 135,000 / year\n\nBenefits..."
+        result = _extract_salary_from_text(text)
+        assert "120,000" in result
+        assert "135,000" in result
+
+    def test_dollar_range_per_year(self):
+        text = "We offer $150,000 - $180,000 per year plus equity."
+        result = _extract_salary_from_text(text)
+        assert "150,000" in result
+        assert "180,000" in result
+
+    def test_k_suffix_range(self):
+        text = "Salary: $140k–$175k depending on experience."
+        result = _extract_salary_from_text(text)
+        assert "140,000" in result
+        assert "175,000" in result
+
+    def test_base_salary_label(self):
+        text = "Base salary: $160,000 - $200,000"
+        result = _extract_salary_from_text(text)
+        assert "160,000" in result
+
+    def test_returns_empty_when_no_salary(self):
+        text = "Join our team to build the future of clean energy. Great benefits."
+        result = _extract_salary_from_text(text)
+        assert result == ""
+
+    def test_ignores_hourly_rates(self):
+        """Hourly rates (e.g. $45/hr expressed as annual) should not be mistaken for salary."""
+        text = "Pay: $25,000 / year"  # below 30K sanity floor
+        result = _extract_salary_from_text(text)
+        # 25,000 < 30,000 sanity threshold → should be skipped
+        assert result == "" or "25,000" not in result
+
+    def test_handles_en_dash_separator(self):
+        text = "Compensation\n120,000 – 135,000 / year"
+        result = _extract_salary_from_text(text)
+        assert result != ""

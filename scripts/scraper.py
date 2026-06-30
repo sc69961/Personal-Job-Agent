@@ -9,6 +9,7 @@ Sources:
 """
 
 import json
+import re
 import time
 import hashlib
 import logging
@@ -18,6 +19,47 @@ import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Salary extraction from description text
+# ---------------------------------------------------------------------------
+
+_SALARY_PATTERNS = [
+    # "Compensation\n120,000 – 135,000 / year"  (Lever style)
+    r'compensation[\s\n:]*\$?([\d,]+)\s*[-–—]\s*\$?([\d,]+)\s*(?:/\s*(?:year|yr|annual))?',
+    # "$120,000 - $160,000 per year"
+    r'\$\s*([\d,]+)\s*[-–—]\s*\$\s*([\d,]+)\s*(?:per\s+year|/\s*year|/\s*yr|annually)',
+    # "120K - 160K"  or  "$120k–$160k"
+    r'\$?\s*([\d]+)k\s*[-–—]\s*\$?\s*([\d]+)k',
+    # "Base salary: $140,000"
+    r'(?:base\s+)?salary[:\s]+\$?([\d,]+)(?:\s*[-–—]\s*\$?([\d,]+))?',
+]
+
+def _extract_salary_from_text(text: str) -> str:
+    """
+    Scan description text for a salary range and return a clean string like
+    '$120,000–$135,000 / year', or '' if nothing found.
+    """
+    text_lower = text.lower()
+    for pattern in _SALARY_PATTERNS:
+        m = re.search(pattern, text_lower)
+        if m:
+            lo = m.group(1).replace(",", "")
+            hi_raw = m.group(2) if m.lastindex and m.lastindex >= 2 else None
+            # Handle "k" suffix patterns (group values are already digits-only)
+            if "k" in pattern:
+                lo_val = int(lo) * 1000
+                hi_val = int(hi_raw) * 1000 if hi_raw else None
+            else:
+                lo_val = int(lo)
+                hi_val = int(hi_raw.replace(",", "")) if hi_raw else None
+            if lo_val < 30_000:   # sanity: skip hourly/daily rates mistaken as annual
+                continue
+            if hi_val:
+                return f"${lo_val:,}–${hi_val:,} / year"
+            return f"${lo_val:,} / year"
+    return ""
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -367,10 +409,11 @@ def _scrape_lever(company: str, slug: str) -> list:
             location = cats.get("location") or (cats.get("allLocations") or ["Remote"])[0]
             desc = posting.get("descriptionPlain", "") or BeautifulSoup(
                 posting.get("description", ""), "html.parser").get_text()
+            salary_text = _extract_salary_from_text(desc)
             jobs.append(make_job(
                 title=title, company=company, location=location,
                 url=posting.get("hostedUrl", ""), description=desc[:3000],
-                source="company_site",
+                source="company_site", salary_text=salary_text,
             ))
         logger.info(f"{company} (Lever): {len(jobs)} PM roles")
         return jobs
@@ -449,11 +492,12 @@ def _scrape_ashby(company: str, slug: str) -> list:
                 continue
             location = posting.get("locationName") or ("Remote" if posting.get("isRemote") else "Unknown")
             desc = BeautifulSoup(posting.get("descriptionHtml", ""), "html.parser").get_text()
+            salary_text = _extract_salary_from_text(desc)
             job_url = posting.get("externalLink") or f"https://jobs.ashbyhq.com/{slug}/{posting.get('id', '')}"
             jobs.append(make_job(
                 title=title, company=company, location=location,
                 url=job_url, description=desc[:3000],
-                source="company_site",
+                source="company_site", salary_text=salary_text,
             ))
         logger.info(f"{company} (Ashby): {len(jobs)} PM roles")
         return jobs

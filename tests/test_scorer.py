@@ -208,6 +208,49 @@ class TestPreFilterLocation:
         ok, reason = pre_filter(job, config)
         assert ok
 
+    # --- Regression: international-remote jobs that slipped through ---
+
+    def test_filters_remote_madrid_in_description(self, config):
+        """Regression: Ashby returns isRemote=True for a Madrid role → location='Remote'.
+        The description reveals it's Spain-based; should be filtered."""
+        job = make_job(
+            title="Senior Product Manager",
+            location="Remote",
+            description="This is a remote role based out of our Madrid, Spain office.",
+        )
+        ok, reason = pre_filter(job, config)
+        assert not ok, "Madrid remote role should be filtered"
+
+    def test_filters_remote_london_in_description(self, config):
+        """Remote (London) should be caught via description scan."""
+        job = make_job(
+            title="Senior Product Manager",
+            location="Remote",
+            description="Remote role — must be based in London, UK.",
+        )
+        ok, reason = pre_filter(job, config)
+        assert not ok
+
+    def test_passes_remote_us_even_if_description_mentions_europe(self, config):
+        """A US remote role that mentions European partners should NOT be filtered."""
+        job = make_job(
+            title="Senior Product Manager",
+            location="Remote",
+            description="Remote anywhere in the US. We work with clients in London and Spain.",
+        )
+        ok, reason = pre_filter(job, config)
+        assert ok, "US remote role mentioning European clients should pass"
+
+    def test_passes_blank_location_no_international_in_desc(self, config):
+        """Blank location + no international signals in description → pass through."""
+        job = make_job(
+            title="Senior Product Manager",
+            location="",
+            description="Lead our DER platform team. We are based in Colorado.",
+        )
+        ok, reason = pre_filter(job, config)
+        assert ok
+
 
 # ---------------------------------------------------------------------------
 # pre_filter — salary floor
@@ -308,6 +351,20 @@ class TestBuildScoringPrompt:
         prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
         # At least one target company should appear in the prompt
         assert any(co in prompt for co in config["ALL_TARGET_COMPANIES"])
+
+    def test_salary_prompt_uses_structured_field(self, config):
+        """Salary is now extracted into salary_text by the scraper and echoed by Claude
+        from the structured 'Salary info' field — not fished from raw description text."""
+        job = make_job(salary_text="$120,000–$135,000 / year")
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        # The structured salary value must appear in the prompt
+        assert "$120,000" in prompt or "120,000" in prompt
+
+    def test_salary_prompt_says_use_structured_field(self, config):
+        """The salary prompt must direct Claude to use the structured salary info field."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "Salary info" in prompt  # the structured field label must be referenced
 
 
 # ---------------------------------------------------------------------------

@@ -90,10 +90,21 @@ def pre_filter(job: dict, config: dict) -> tuple:
             return False, f"junior signal in title: '{signal}'"
 
     # --- Location filtering ---
+    desc_only = job.get("description", "").lower()  # description without location appended
 
     # 1. Drop international jobs outright (location field is most reliable signal)
     if any(sig in location for sig in _INTERNATIONAL_SIGNALS):
         return False, f"international location: {location.strip()}"
+
+    # 1b. If location is vague (Remote/Unknown/blank), also scan description for
+    #     international signals — catches "Remote (Spain)", "Remote from Madrid", etc.
+    is_vague_location = not location or location in ("remote", "unknown", "anywhere")
+    if is_vague_location and any(sig in desc_only for sig in _INTERNATIONAL_SIGNALS):
+        # Allow if description also has strong US signals that outweigh international mention
+        has_us_signal = any(sig in desc_only for sig in ["united states", "usa", "u.s.", "us only",
+                                                           "anywhere in the us", "denver", "colorado"])
+        if not has_us_signal:
+            return False, f"international signals in description (location: '{location.strip()}')"
 
     # 2. If no remote/hybrid signal anywhere, job must be in Denver metro
     has_remote  = any(sig in desc for sig in _REMOTE_SIGNALS)
@@ -234,7 +245,7 @@ Return ONLY valid JSON (no markdown, no explanation outside the JSON):
   "match_summary": "<2-3 sentence plain-English summary of fit. Be specific to THIS job and THIS candidate's background.>",
   "apply_recommendation": <"strong yes" | "yes" | "maybe" | "no">,
   "work_type": <"remote" | "hybrid" | "on-site" | "unknown">,
-  "salary_estimate": "<If salary listed, echo it. If not, estimate a realistic market range for this title/company in USD, e.g. '$140K–$175K'. Never leave blank.>",
+  "salary_estimate": "<If Salary info above is provided, echo it. If 'Not specified', estimate a realistic market BASE salary range for this title/level/company in USD, e.g. '$140K–$175K base'. Never leave blank.>",
   "short_description": "<1 sentence: what the company does + what this PM will own. Max 120 chars.>"
 }}
 """
