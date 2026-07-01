@@ -24,7 +24,9 @@ CRM_PATH = "./output/crm.json"
 GMAIL_SEARCH_QUERIES = [
     # Emails we sent that look like applications
     'from:me subject:(application OR "cover letter" OR resume OR "applied for") newer_than:120d',
-    # Automated "thank you for applying" responses
+    # ATS auto-confirmations — keep to catch applications Steve submitted
+    # without sending a manual email (e.g. LinkedIn Easy Apply, direct ATS form)
+    # Claude classifies these as 'applied', not 'response_received'
     'subject:("thank you for applying" OR "application received" OR "we received your application") newer_than:120d',
     # Interview requests
     'subject:(interview OR "next steps" OR "move forward" OR "schedule a call" OR "chat with") newer_than:120d',
@@ -177,9 +179,9 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
   "company": "<company name — strip legal suffixes like Inc, LLC, Corp from display but return the clean name>",
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
   "status": "<Choose ONE — read carefully:
-    applied = Steve submitted an application; company sent an auto-confirmation; no human response yet.
-    response_received = A human at the company replied (not an auto-reply), but no interview scheduled.
-    interview_requested = An actual interview, phone screen, or hiring-manager call was explicitly scheduled or requested.
+    applied = Steve submitted an application OR the only reply is an automated ATS confirmation. Auto-confirmations include: 'Thank you for applying', 'We received your application', 'Your application has been submitted', 'Application received', noreply/donotreply sender addresses, or any email that is clearly a templated system message. These are NOT human responses — keep status as 'applied'.
+    response_received = A REAL HUMAN at the company (recruiter, hiring manager) sent a personal reply that is NOT a template. The email must be clearly written for Steve specifically, not a form letter. Signs of a real human reply: personalized greeting, specific questions, scheduling language, signed with a person's name and title.
+    interview_requested = An actual interview, phone screen, or hiring-manager call was explicitly scheduled or requested by a human.
     rejected = Company says they are NOT moving forward. ANY of these phrases = rejected: 'not to advance', 'not moving forward', 'decided not to', 'not the right fit', 'after careful deliberation', 'not selected', 'moving in a different direction', 'will not be proceeding', 'pursuing other candidates'. Use rejected even if earlier emails showed an interview.
     offer = Company sent an ACTUAL FORMAL JOB OFFER with specific salary numbers, start date, or benefits package in THIS email thread. A job description mentioning a salary range is NOT an offer. 'Thank you for applying' is NOT an offer. An ATS confirmation email is NOT an offer. Only use 'offer' if the email text explicitly says something like 'we would like to offer you the position' or 'offer letter attached'.
     withdrawn = Steve withdrew his application.>",
