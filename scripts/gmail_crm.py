@@ -28,8 +28,11 @@ GMAIL_SEARCH_QUERIES = [
     'subject:("thank you for applying" OR "application received" OR "we received your application") newer_than:120d',
     # Interview requests
     'subject:(interview OR "next steps" OR "move forward" OR "schedule a call" OR "chat with") newer_than:120d',
-    # Rejections
+    # Rejections — subject line signals
     'subject:("unfortunately" OR "not moving forward" OR "decided to" OR "other candidates" OR "position has been filled") newer_than:120d',
+    # Rejections — body text signals (catches polite rejections that arrive as replies)
+    '("not to advance" OR "not moving forward" OR "decided not to move" OR "not selected" OR "moving in a different direction" OR "not advance you" OR "not be moving forward") newer_than:120d',
+    '("after careful deliberation" OR "after careful consideration" OR "we have decided" OR "difficult decision" OR "not the right fit") newer_than:120d',
     # Offers
     'subject:(offer OR "pleased to" OR "excited to offer") newer_than:120d',
 ]
@@ -139,14 +142,17 @@ def _header(headers: list, name: str) -> str:
 
 
 def _summarize_thread(messages: list) -> str:
-    """Build a compact text summary of a thread for Claude."""
+    """Build a compact text summary of a thread for Claude.
+    Processes up to 10 messages, 1500 chars each, newest-last so Claude
+    sees the most recent reply (e.g. a rejection) in the final position.
+    """
     parts = []
-    for msg in messages[:6]:
+    for msg in messages[:10]:
         headers = msg.get("payload", {}).get("headers", [])
         subject = _header(headers, "subject")
         from_   = _header(headers, "from")
         date    = _header(headers, "date")
-        body    = _extract_text(msg.get("payload", {}))[:600]
+        body    = _extract_text(msg.get("payload", {}))[:1500]
         parts.append(f"From: {from_}\nDate: {date}\nSubject: {subject}\n{body}")
     return "\n---\n".join(parts)
 
@@ -169,7 +175,7 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
   "job_title": "<job title applied for — check the subject line, email body, and any 'Re:' lines. If you see a specific role name, use it. Only use empty string if truly impossible to determine>",
   "company": "<company name — strip legal suffixes like Inc, LLC, Corp from display but return the clean name>",
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
-  "status": "<one of: applied | response_received | interview_requested | rejected | offer | withdrawn>",
+  "status": "<one of: applied | response_received | interview_requested | rejected | offer | withdrawn. Use 'rejected' for ANY email indicating they are not moving forward — including polite language like 'not to advance you', 'not moving forward', 'decided not to', 'not the right fit', 'after careful deliberation', 'not selected', 'moving in a different direction'. If the most recent email in the thread is a rejection, use 'rejected' even if earlier emails showed an interview.>",
   "status_label": "<one of: Applied | Response Received | Interview Requested | Rejected | Offer Received | Withdrawn>",
   "last_activity": "<YYYY-MM-DD of the most recent email in thread>",
   "follow_up_date": "<YYYY-MM-DD — if no response yet, suggest following up in 7-10 business days from last_activity; if interview scheduled, put that date; if rejected or offer, leave empty>",
@@ -256,6 +262,50 @@ def sync_gmail_crm(config: dict) -> dict:
     app_by_id = {app["id"]: app for app in crm["applications"]}
 
     processed = 0
+
+    # -----------------------------------------------------------------------
+    # Pass 0: Re-scan existing active application threads for status updates.
+    # This catches rejections/offers that arrive as replies to already-seen
+    # threads (e.g. interview thread → recruiter sends rejection in same chain).
+    # -----------------------------------------------------------------------
+    RESCAN_STATUSES = {"applied", "response_received", "interview_requested"}
+    for app in crm["applications"]:
+        if app.get("status") in RESCAN_STATUSES:
+            for tid in app.get("thread_ids", []):
+                try:
+                    thread   = service.users().threads().get(userId="me", id=tid, format="full").execute()
+                    messages = thread.get("messages", [])
+                    # Only re-analyze if the thread has grown since last_activity
+                    if not messages:
+                        continue
+                    latest_headers = messages[-1].get("payload", {}).get("headers", [])
+                    latest_date    = _header(latest_headers, "date")
+                    last_activity  = app.get("last_activity", "")
+                    # Parse and compare dates
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        latest_dt = parsedate_to_datetime(latest_date)
+                        last_dt   = datetime.fromisoformat(last_activity) if last_activity else None
+                        if last_dt and latest_dt.date() <= last_dt.date():
+                            continue  # no new messages, skip
+                    except Exception:
+                        pass  # can't parse dates — re-analyze anyway
+                    summary = _summarize_thread(messages)
+                    result  = _analyze_thread(summary, client)
+                    if not result:
+                        continue
+                    new_status = result.get("status", "applied")
+                    if _should_upgrade_status(app.get("status", "applied"), new_status):
+                        logger.info(f"  Thread rescan: {app.get('company')} '{app.get('job_title')}' "
+                                    f"{app['status']} → {new_status}")
+                        app["status"]       = new_status
+                        app["status_label"] = result.get("status_label", app.get("status_label", ""))
+                        app["last_activity"] = result.get("last_activity", app.get("last_activity", ""))
+                        app["notes"]         = result.get("notes", app.get("notes", ""))
+                        app["recommended_action"] = result.get("recommended_action", "")
+                        processed += 1
+                except Exception as e:
+                    logger.debug(f"  Thread rescan failed for {tid}: {e}")
 
     for query in GMAIL_SEARCH_QUERIES:
         try:
