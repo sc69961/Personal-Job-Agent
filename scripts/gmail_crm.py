@@ -33,8 +33,9 @@ GMAIL_SEARCH_QUERIES = [
     # Rejections — body text signals (catches polite rejections that arrive as replies)
     '("not to advance" OR "not moving forward" OR "decided not to move" OR "not selected" OR "moving in a different direction" OR "not advance you" OR "not be moving forward") newer_than:120d',
     '("after careful deliberation" OR "after careful consideration" OR "we have decided" OR "difficult decision" OR "not the right fit") newer_than:120d',
-    # Offers
-    'subject:(offer OR "pleased to" OR "excited to offer") newer_than:120d',
+    # Offers — require stronger signals than just "offer" (too many false positives)
+    'subject:("offer letter" OR "job offer" OR "pleased to offer" OR "excited to offer you" OR "formal offer") newer_than:120d',
+    '("we would like to offer you" OR "offer letter attached" OR "contingent offer" OR "total compensation" OR "start date") newer_than:120d',
 ]
 
 # Status priority — higher index wins when merging
@@ -175,14 +176,21 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
   "job_title": "<job title applied for — check the subject line, email body, and any 'Re:' lines. If you see a specific role name, use it. Only use empty string if truly impossible to determine>",
   "company": "<company name — strip legal suffixes like Inc, LLC, Corp from display but return the clean name>",
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
-  "status": "<one of: applied | response_received | interview_requested | rejected | offer | withdrawn. Use 'rejected' for ANY email indicating they are not moving forward — including polite language like 'not to advance you', 'not moving forward', 'decided not to', 'not the right fit', 'after careful deliberation', 'not selected', 'moving in a different direction'. If the most recent email in the thread is a rejection, use 'rejected' even if earlier emails showed an interview.>",
+  "status": "<Choose ONE — read carefully:
+    applied = Steve submitted an application; company sent an auto-confirmation; no human response yet.
+    response_received = A human at the company replied (not an auto-reply), but no interview scheduled.
+    interview_requested = An actual interview, phone screen, or hiring-manager call was explicitly scheduled or requested.
+    rejected = Company says they are NOT moving forward. ANY of these phrases = rejected: 'not to advance', 'not moving forward', 'decided not to', 'not the right fit', 'after careful deliberation', 'not selected', 'moving in a different direction', 'will not be proceeding', 'pursuing other candidates'. Use rejected even if earlier emails showed an interview.
+    offer = Company sent an ACTUAL FORMAL JOB OFFER with specific salary numbers, start date, or benefits package in THIS email thread. A job description mentioning a salary range is NOT an offer. 'Thank you for applying' is NOT an offer. An ATS confirmation email is NOT an offer. Only use 'offer' if the email text explicitly says something like 'we would like to offer you the position' or 'offer letter attached'.
+    withdrawn = Steve withdrew his application.>",
   "status_label": "<one of: Applied | Response Received | Interview Requested | Rejected | Offer Received | Withdrawn>",
   "last_activity": "<YYYY-MM-DD of the most recent email in thread>",
   "follow_up_date": "<YYYY-MM-DD — if no response yet, suggest following up in 7-10 business days from last_activity; if interview scheduled, put that date; if rejected or offer, leave empty>",
   "recommended_action": "<1 concise sentence: the single most important action Steve should take right now>"
 }}
 
-IMPORTANT for job_title: Look carefully at the email subject lines (especially lines starting with 'Subject:', 'Re:', or 'Fwd:'). The role name is almost always mentioned. If the subject says 'Thank you for applying to Senior Product Manager at Acme', the job_title is 'Senior Product Manager'. Never leave job_title blank if the role name appears anywhere in the thread."""
+IMPORTANT for job_title: Look carefully at the email subject lines (especially lines starting with 'Subject:', 'Re:', or 'Fwd:'). The role name is almost always mentioned. If the subject says 'Thank you for applying to Senior Product Manager at Acme', the job_title is 'Senior Product Manager'. Never leave job_title blank if the role name appears anywhere in the thread.
+IMPORTANT for offer: Be very conservative. If you are not 100% certain this is a real offer letter (specific compensation, start date, or explicit 'we want to hire you'), use 'response_received' or 'interview_requested' instead. A false offer in the CRM is more damaging than a missed one."""
 
     try:
         resp = client.messages.create(
