@@ -84,6 +84,34 @@ def run(args):
 
     config = load_config()
 
+    # ── CRM-ONLY MODE ────────────────────────────────────────────────────
+    if args.crm_only:
+        logger.info("Mode: CRM sync only (no scraping or scoring)")
+        scored_path = "./output/scored_jobs.json"
+        scored_jobs = []
+        if os.path.exists(scored_path):
+            with open(scored_path) as f:
+                scored_jobs = json.load(f)
+            logger.info(f"  Loaded {len(scored_jobs)} cached scored jobs for dashboard")
+        try:
+            from scripts.gmail_crm import sync_gmail_crm
+            crm = sync_gmail_crm(config)
+            from collections import Counter
+            counts = Counter(a.get("status", "unknown") for a in crm.get("applications", []))
+            for status, n in sorted(counts.items()):
+                logger.info(f"    {status}: {n}")
+        except Exception as e:
+            logger.warning(f"CRM sync failed: {e}")
+            crm = {}
+        from scripts.dashboard import generate_dashboard
+        out = "./public/index.html" if args.headless else "./output/dashboard.html"
+        generate_dashboard(scored_jobs, crm=crm, output_path=out)
+        logger.info(f"  Dashboard written → {out}")
+        if not args.headless:
+            import webbrowser
+            webbrowser.open(f"file://{os.path.abspath(out)}")
+        return
+
     # ── DASHBOARD-ONLY MODE ───────────────────────────────────────────────
     if args.dashboard:
         scored_path = "./output/scored_jobs.json"
@@ -384,5 +412,6 @@ if __name__ == "__main__":
     parser.add_argument("--email-only", action="store_true", help="Resend digest from last results")
     parser.add_argument("--dashboard",  action="store_true", help="Open GUI from cached results, no scraping")
     parser.add_argument("--headless",   action="store_true", help="Cloud/CI mode: no browser, write HTML to public/")
+    parser.add_argument("--crm-only",   action="store_true", help="Sync Gmail CRM only — no scraping or scoring")
     args = parser.parse_args()
     run(args)

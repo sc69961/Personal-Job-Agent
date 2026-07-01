@@ -1,0 +1,61 @@
+name: CRM Sync — Gmail Status Update
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 8am MT daily (midday UTC) — catches morning email activity
+    - cron: '0 22 * * *'   # 4pm MT daily (evening UTC) — catches afternoon replies
+  workflow_dispatch:        # manual trigger from GitHub Actions tab anytime
+
+jobs:
+  sync-crm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore output cache
+        uses: actions/cache@v4
+        with:
+          path: output/
+          key: job-agent-output-${{ github.run_id }}
+          restore-keys: |
+            job-agent-output-
+
+      - name: Ensure directories exist
+        run: mkdir -p output public
+
+      - name: Decode Google credentials
+        run: echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > config/google_credentials.json
+
+      - name: Decode Google OAuth token
+        run: echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
+
+      - name: Sync Gmail CRM only
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python main.py --headless --crm-only
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy updated dashboard to Firebase
+        run: firebase deploy --only hosting:jobs --token "${{ secrets.FIREBASE_TOKEN }}" || true
+
+      - name: Upload CRM log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-sync-logs-${{ github.run_id }}
+          path: output/job_agent.log
+          retention-days: 7
