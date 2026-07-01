@@ -89,7 +89,8 @@ class TestScorerIntegration:
         assert len(results) == 1
         assert results[0]["score"] == 78
         assert results[0]["apply_recommendation"] == "yes"
-        assert results[0]["first_seen"] == datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert results[0]["first_seen"].startswith(today)
 
     def test_malformed_claude_response_does_not_crash(self, tmp_path):
         """If Claude returns garbage JSON, pipeline continues gracefully."""
@@ -248,14 +249,21 @@ class TestDashboardRendering:
         assert len(new_badges) == 0
 
     def test_applied_badge_appears_for_crm_company(self, tmp_path):
-        """Jobs at companies with a CRM entry should show the CRM status badge."""
+        """CRM badge shows only on the job whose company + title match the CRM entry."""
         from scripts.dashboard import generate_dashboard
 
-        jobs = [make_job("j1", company="Uplight", score=80, first_seen="2026-06-01")]
+        # Two Uplight jobs — only the one matching the CRM title should get the badge
+        jobs = [
+            make_job("j1", title="Senior Product Manager", company="Uplight",
+                     score=80, first_seen="2026-06-01"),
+            make_job("j2", title="Staff Product Manager", company="Uplight",
+                     score=75, first_seen="2026-06-01"),
+        ]
         crm = {
             "applications": [
                 {"id": "a1", "company": "Uplight", "status": "interview_requested",
-                 "status_label": "Interview Requested", "job_title": "PM",
+                 "status_label": "Interview Requested",
+                 "job_title": "Senior Product Manager",   # matches j1 only
                  "job_url": "", "applied_date": "", "last_activity": "2026-06-22",
                  "follow_up_date": "", "recommended_action": "", "notes": "", "thread_ids": []}
             ]
@@ -264,7 +272,9 @@ class TestDashboardRendering:
         output_path = str(tmp_path / "dashboard.html")
         generate_dashboard(jobs, crm=crm, output_path=output_path)
         html = open(output_path).read()
-        assert "Interviewing" in html
+        assert "Interviewing" in html  # badge appears somewhere
+        # Verify the badge is title-scoped: only one match, not two
+        assert html.count("Interviewing") == 1
 
     def test_renders_with_empty_jobs_list(self, tmp_path):
         """Empty job list should render without crashing."""

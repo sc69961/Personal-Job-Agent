@@ -6,8 +6,9 @@ dashboard.py — Generates a two-tab local HTML dashboard:
 
 import json
 import os
+import re
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +141,35 @@ def _normalize(name: str) -> str:
     return ' '.join(name.lower().split())
 
 
-def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
-    today = datetime.now().strftime("%Y-%m-%d")
+def _normalize_title(title: str) -> str:
+    """Normalize job title for loose matching: lowercase, collapse punctuation/spaces."""
+    return re.sub(r'[\s\-–—,/|]+', ' ', title.lower()).strip()
 
-    # Build CRM lookup: normalized company → (status, status_label)
-    crm_lookup = {}
+
+_STATUS_RANK = ["applied", "ghosted", "withdrawn", "response_received",
+                "rejected", "interview_requested", "offer"]
+
+def _status_rank(status: str) -> int:
+    try:
+        return _STATUS_RANK.index(status)
+    except ValueError:
+        return -1
+
+def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
+    now = datetime.now()
+
+    # Build CRM lookup: (normalized_company, normalized_title) → (status, status_label)
+    # Also a company-only fallback for display on cards that don't title-match
+    crm_by_title = {}   # (norm_company, norm_title) → (status, label)
     for app in (crm or {}).get("applications", []):
-        key = _normalize(app.get("company", ""))
-        if key:
-            crm_lookup[key] = (app.get("status", "applied"), app.get("status_label", "Applied"))
+        co_key    = _normalize(app.get("company", ""))
+        title_key = _normalize_title(app.get("job_title", ""))
+        if co_key and title_key:
+            pair = (co_key, title_key)
+            existing = crm_by_title.get(pair)
+            # Keep highest-priority status if duplicates
+            if not existing or _status_rank(app.get("status")) > _status_rank(existing[0]):
+                crm_by_title[pair] = (app.get("status", "applied"), app.get("status_label", "Applied"))
 
     crm_status_styles = {
         "offer":              ("🏆 Offer",        "#fbbf24", "#2a1f00", "#78350f"),
@@ -187,25 +208,37 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
         salary         = j.get("salary_estimate", "Not available")
         url            = j.get("url", "#")
 
-        # NEW badge — only shows today
-        is_new = j.get("first_seen", "") == today
+        # NEW badge — job scraped within the last 24 hours
+        first_seen_str = j.get("first_seen", "")
+        is_new = False
+        if first_seen_str:
+            try:
+                fs = datetime.fromisoformat(first_seen_str)
+                is_new = (now - fs) < timedelta(hours=24)
+            except ValueError:
+                # Legacy: date-only string "YYYY-MM-DD"
+                is_new = first_seen_str == now.strftime("%Y-%m-%d")
         new_badge = '<span style="display:inline-block;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:5px;background:#1e2a0f;color:#a3e635;border:1px solid #3f6212;margin-left:8px;letter-spacing:0.05em;">NEW</span>' if is_new else ""
 
-        # APPLIED / CRM status badge
-        crm_key = _normalize(j.get("company", ""))
+        # APPLIED / CRM status badge — matched by company + job title
+        co_key    = _normalize(j.get("company", ""))
+        title_key = _normalize_title(j.get("title", ""))
+        crm_match = crm_by_title.get((co_key, title_key))
         crm_badge = ""
-        if crm_key in crm_lookup:
-            status, status_label = crm_lookup[crm_key]
+        crm_card_border = ""
+        if crm_match:
+            status, status_label = crm_match
             style_label, text_c, bg_c, border_c = crm_status_styles.get(status, ("Applied", "#94a3b8", "#1a1d27", "#2d3148"))
             crm_badge = f'<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:3px 8px;border-radius:5px;background:{bg_c};color:{text_c};border:1px solid {border_c};margin-left:6px;">{style_label}</span>'
+            crm_card_border = f"border-left: 4px solid {border_c};"
 
         cards_html += f"""
-        <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}" data-rec="{rec}">
+        <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}" data-rec="{rec}" style="{crm_card_border}">
           <div class="card-header">
             <div class="score-badge {score_class}">{score}</div>
             <div class="card-title-block">
-              <div class="job-title">{j.get('title','')}{new_badge}</div>
-              <div class="company-name">{tier_emoji} {j.get('company','')}{crm_badge}</div>
+              <div class="job-title">{j.get('title','')}{new_badge}{crm_badge}</div>
+              <div class="company-name">{tier_emoji} {j.get('company','')}</div>
             </div>
             <span class="rec-badge {rec_class}">{rec_label}</span>
           </div>

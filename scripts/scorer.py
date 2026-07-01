@@ -285,7 +285,7 @@ def score_job(job: dict, config: dict, client: Anthropic, positive_outcome_compa
 
             result = json.loads(raw)
 
-            job["first_seen"]         = job.get("first_seen") or datetime.now().strftime("%Y-%m-%d")
+            job["first_seen"]         = job.get("first_seen") or datetime.now().isoformat()
             job["score"]              = result.get("score", 0)
             job["confidence"]         = result.get("confidence", 50)
             job["title_match"]        = result.get("title_match", "unknown")

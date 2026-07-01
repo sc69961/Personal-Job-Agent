@@ -457,8 +457,9 @@ class TestScoreJob:
         assert "first_seen" not in job or job.get("first_seen") is None
 
         result = score_job(job, config, client)
+        # first_seen is now a full ISO timestamp — check it starts with today's date
         today = datetime.now().strftime("%Y-%m-%d")
-        assert result["first_seen"] == today
+        assert result["first_seen"].startswith(today), f"first_seen={result['first_seen']!r} should start with {today}"
 
     def test_preserves_existing_first_seen(self, config):
         claude_response = {
