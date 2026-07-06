@@ -287,7 +287,7 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
             f'<a href="{url}" target="_blank" class="apply-btn">Apply →</a>'
         )
 
-        # Full detail shown in action queue; compact in archive
+        # Collapsible body — hidden by default, revealed on card click
         body_html = ""
         if not archived:
             short_desc     = j.get("short_description", "")
@@ -295,19 +295,23 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
             reasons_html   = "".join(f'<li>{r}</li>' for r in j.get("top_reasons", []))
             strengths_html = "".join(f'<li>{s}</li>' for s in j.get("top_strengths", []))
             gaps_html      = "".join(f'<li>{g}</li>' for g in j.get("top_gaps", []))
-            body_html = f"""
-          {f'<p class="short-desc">{short_desc}</p>' if short_desc else ''}
-          {f'<p class="match-summary">{match_summary}</p>' if match_summary else ''}
-          {f'<div class="reasons"><strong>📋 Why this score</strong><ul>{reasons_html}</ul></div>' if reasons_html else ''}
-          <div class="strengths-gaps">
-            {f'<div class="strengths"><strong>✅ Strengths</strong><ul>{strengths_html}</ul></div>' if strengths_html else ''}
-            {f'<div class="gaps"><strong>⚠️ Gaps</strong><ul>{gaps_html}</ul></div>' if gaps_html else ''}
-          </div>"""
+            strengths_div = f'<div class="strengths"><strong>✅ Strengths</strong><ul>{strengths_html}</ul></div>' if strengths_html else ''
+            gaps_div      = f'<div class="gaps"><strong>⚠️ Gaps</strong><ul>{gaps_html}</ul></div>' if gaps_html else ''
+            sg_div        = f'<div class="strengths-gaps">{strengths_div}{gaps_div}</div>' if (strengths_html or gaps_html) else ''
+            reasons_div   = f'<div class="reasons"><strong>📋 Why this score</strong><ul>{reasons_html}</ul></div>' if reasons_html else ''
+            inner = (
+                (f'<p class="short-desc">{short_desc}</p>' if short_desc else '') +
+                (f'<p class="match-summary">{match_summary}</p>' if match_summary else '') +
+                reasons_div + sg_div
+            )
+            if inner.strip():
+                body_html = f'<div class="card-body">{inner}</div>'
 
         return f"""
         <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}"
              data-rec="{rec}" data-applied="{is_applied_str}" data-index="{idx}"
-             style="{left_border}{new_border}{dim_style}">
+             onclick="toggleCard(event, this)"
+             style="cursor:pointer;{left_border}{new_border}{dim_style}">
           <div class="card-header">
             <div class="score-badge {score_class}">{score}</div>
             <div class="card-title-block">
@@ -864,6 +868,11 @@ def generate_dashboard(
     .action-cell {{ max-width: 260px; color: #94a3b8; font-size: 0.8rem; line-height: 1.4; }}
     .followup-due {{ color: #fbbf24; font-weight: 600; }}
 
+    /* ── Collapsible card body ── */
+    .card-body {{ display: none; }}
+    .card.expanded .card-body {{ display: flex; flex-direction: column; gap: 10px; }}
+    .card.expanded {{ border-color: #4f6ef7 !important; }}
+
     /* ── Job tab: action queue / archive sections ── */
     .section-label {{ display: flex; align-items: center; gap: 8px; padding: 14px 32px 6px; font-size: 0.82rem; font-weight: 600; color: #94a3b8; }}
     .section-count {{ font-size: 0.72rem; background: #1e2235; color: #64748b; border: 1px solid #2d3148; border-radius: 20px; padding: 2px 8px; }}
@@ -905,6 +914,11 @@ def generate_dashboard(
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
+  }}
+
+  function toggleCard(event, el) {{
+    if (event.target.closest('.apply-btn, .apply-btn-dim')) return;
+    el.classList.toggle('expanded');
   }}
 
   let notAppliedActive = false;
