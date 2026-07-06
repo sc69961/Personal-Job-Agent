@@ -159,15 +159,13 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
     now = datetime.now()
 
     # Build CRM lookup: (normalized_company, normalized_title) → (status, status_label)
-    # Also a company-only fallback for display on cards that don't title-match
-    crm_by_title = {}   # (norm_company, norm_title) → (status, label)
+    crm_by_title = {}
     for app in (crm or {}).get("applications", []):
         co_key    = _normalize(app.get("company", ""))
         title_key = _normalize_title(app.get("job_title", ""))
         if co_key and title_key:
             pair = (co_key, title_key)
             existing = crm_by_title.get(pair)
-            # Keep highest-priority status if duplicates
             if not existing or _status_rank(app.get("status")) > _status_rank(existing[0]):
                 crm_by_title[pair] = (app.get("status", "applied"), app.get("status_label", "Applied"))
 
@@ -181,85 +179,175 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
         "withdrawn":          ("↩ Withdrawn",     "#64748b", "#1a1d27", "#2d3148"),
     }
 
-    total = len(jobs)
-    cards_html = ""
-    for j in jobs:
+    # ── Helpers ──
+
+    def _is_new(j) -> bool:
+        fs = j.get("first_seen", "")
+        if not fs:
+            return False
+        try:
+            return (now - datetime.fromisoformat(fs)) < timedelta(hours=24)
+        except ValueError:
+            return fs == now.strftime("%Y-%m-%d")
+
+    def _age_label(j) -> str:
+        fs = j.get("first_seen", "")
+        if not fs:
+            return ""
+        try:
+            delta = now - datetime.fromisoformat(fs)
+            if delta.total_seconds() < 3600:
+                return f"{int(delta.total_seconds() / 60)}m ago"
+            if delta.total_seconds() < 86400:
+                return f"{int(delta.total_seconds() / 3600)}h ago"
+            return f"{delta.days}d ago"
+        except Exception:
+            return ""
+
+    def _is_stale(j) -> bool:
+        """True if first_seen is older than 7 days."""
+        fs = j.get("first_seen", "")
+        if not fs:
+            return False
+        try:
+            return (now - datetime.fromisoformat(fs)) > timedelta(days=7)
+        except ValueError:
+            try:
+                return (now - datetime.strptime(fs, "%Y-%m-%d")).days > 7
+            except Exception:
+                return False
+
+    # ── Sort: NEW first (within 24h), then by score descending ──
+    sorted_jobs = sorted(jobs, key=lambda j: (0 if _is_new(j) else 1, -j.get("score", 0)))
+
+    # ── Split into action queue vs. archive ──
+    # Archive = has CRM match (already applied) OR older than 7 days
+    action_pairs = []   # (job, crm_match)
+    archive_pairs = []  # (job, crm_match)
+
+    for j in sorted_jobs:
+        co_key    = _normalize(j.get("company", ""))
+        title_key = _normalize_title(j.get("title", ""))
+        crm_match = crm_by_title.get((co_key, title_key))
+        if crm_match or _is_stale(j):
+            archive_pairs.append((j, crm_match))
+        else:
+            action_pairs.append((j, crm_match))
+
+    # ── Card builder ──
+    def _card(j, crm_match, idx: int, archived: bool = False) -> str:
         score = j.get("score", 0)
         rec   = j.get("apply_recommendation", "maybe").lower()
         tier  = j.get("company_tier", "other")
         work  = j.get("work_type", "unknown")
 
-        tier_emoji = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "🏢")
-        tier_label = {"climatetech": "Climate Tech", "fintech_ai": "Fintech / AI", "other": "Other"}.get(tier, "Other")
-        work_emoji = {"remote": "🌐", "hybrid": "🔀", "on-site": "🏢"}.get(work, "❓")
-        work_label = {"remote": "Remote", "hybrid": "Hybrid", "on-site": "On-site"}.get(work, "Unknown")
-        rec_class  = {"strong yes": "rec-strong-yes", "yes": "rec-yes", "maybe": "rec-maybe", "no": "rec-no"}.get(rec, "rec-maybe")
-        rec_label  = rec.upper().replace("STRONG YES", "STRONG YES ★")
+        tier_emoji  = {"climatetech": "⚡", "fintech_ai": "🤖", "other": "🏢"}.get(tier, "🏢")
+        tier_label  = {"climatetech": "Climate Tech", "fintech_ai": "Fintech / AI", "other": "Other"}.get(tier, "Other")
+        work_emoji  = {"remote": "🌐", "hybrid": "🔀", "on-site": "🏢"}.get(work, "❓")
+        work_label  = {"remote": "Remote", "hybrid": "Hybrid", "on-site": "On-site"}.get(work, "Unknown")
+        rec_class   = {"strong yes": "rec-strong-yes", "yes": "rec-yes", "maybe": "rec-maybe", "no": "rec-no"}.get(rec, "rec-maybe")
+        rec_label   = rec.upper().replace("STRONG YES", "STRONG YES ★")
         score_class = "score-high" if score >= 80 else ("score-mid" if score >= 65 else "score-low")
 
-        confidence     = j.get("confidence", 50)
-        conf_label     = "High confidence" if confidence >= 80 else ("Medium confidence" if confidence >= 55 else "Low confidence — review manually")
-        conf_color     = "#4ade80" if confidence >= 80 else ("#fbbf24" if confidence >= 55 else "#f87171")
-        strengths_html = "".join(f'<li>{s}</li>' for s in j.get("top_strengths", []))
-        gaps_html      = "".join(f'<li>{g}</li>' for g in j.get("top_gaps", []))
-        reasons_html   = "".join(f'<li>{r}</li>' for r in j.get("top_reasons", []))
-        short_desc     = j.get("short_description", "")
-        match_summary  = j.get("match_summary", "")
-        salary         = j.get("salary_estimate", "Not available")
-        url            = j.get("url", "#")
+        confidence = j.get("confidence", 50)
+        conf_color = "#4ade80" if confidence >= 80 else ("#fbbf24" if confidence >= 55 else "#f87171")
+        conf_label = "High" if confidence >= 80 else ("Medium" if confidence >= 55 else "Low — review")
+        salary     = j.get("salary_estimate", "Not available")
+        url        = j.get("url", "#")
+        age        = _age_label(j)
+        is_new     = _is_new(j)
 
-        # NEW badge — job scraped within the last 24 hours
-        first_seen_str = j.get("first_seen", "")
-        is_new = False
-        if first_seen_str:
-            try:
-                fs = datetime.fromisoformat(first_seen_str)
-                is_new = (now - fs) < timedelta(hours=24)
-            except ValueError:
-                # Legacy: date-only string "YYYY-MM-DD"
-                is_new = first_seen_str == now.strftime("%Y-%m-%d")
-        new_badge = '<span style="display:inline-block;font-size:0.68rem;font-weight:800;padding:3px 8px;border-radius:5px;background:#1e2a0f;color:#a3e635;border:1px solid #3f6212;margin-left:8px;letter-spacing:0.05em;">NEW</span>' if is_new else ""
+        new_badge = (
+            '<span style="display:inline-block;font-size:0.68rem;font-weight:800;padding:3px 8px;'
+            'border-radius:5px;background:#1e2a0f;color:#a3e635;border:1px solid #3f6212;'
+            'margin-left:8px;letter-spacing:0.05em;">NEW</span>'
+        ) if is_new else ""
 
-        # APPLIED / CRM status badge — matched by company + job title
-        co_key    = _normalize(j.get("company", ""))
-        title_key = _normalize_title(j.get("title", ""))
-        crm_match = crm_by_title.get((co_key, title_key))
-        crm_badge = ""
-        crm_card_border = ""
+        crm_badge      = ""
+        left_border    = ""
+        is_applied_str = "false"
         if crm_match:
-            status, status_label = crm_match
-            style_label, text_c, bg_c, border_c = crm_status_styles.get(status, ("Applied", "#94a3b8", "#1a1d27", "#2d3148"))
-            crm_badge = f'<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:3px 8px;border-radius:5px;background:{bg_c};color:{text_c};border:1px solid {border_c};margin-left:6px;">{style_label}</span>'
-            crm_card_border = f"border-left: 4px solid {border_c};"
+            status, _ = crm_match
+            style_label, text_c, bg_c, border_c = crm_status_styles.get(
+                status, ("Applied", "#94a3b8", "#1a1d27", "#2d3148"))
+            crm_badge = (
+                f'<span style="display:inline-block;font-size:0.68rem;font-weight:700;padding:3px 8px;'
+                f'border-radius:5px;background:{bg_c};color:{text_c};border:1px solid {border_c};'
+                f'margin-left:6px;">{style_label}</span>'
+            )
+            left_border    = f"border-left: 4px solid {border_c};"
+            is_applied_str = "true"
 
-        cards_html += f"""
-        <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}" data-rec="{rec}" style="{crm_card_border}">
+        new_border = "border-color:#166534;" if (is_new and not archived) else ""
+        dim_style  = "opacity:0.65;" if archived else ""
+
+        btn = (
+            f'<a href="{url}" target="_blank" class="apply-btn apply-btn-dim">View →</a>'
+            if archived else
+            f'<a href="{url}" target="_blank" class="apply-btn">Apply →</a>'
+        )
+
+        # Full detail shown in action queue; compact in archive
+        body_html = ""
+        if not archived:
+            short_desc     = j.get("short_description", "")
+            match_summary  = j.get("match_summary", "")
+            reasons_html   = "".join(f'<li>{r}</li>' for r in j.get("top_reasons", []))
+            strengths_html = "".join(f'<li>{s}</li>' for s in j.get("top_strengths", []))
+            gaps_html      = "".join(f'<li>{g}</li>' for g in j.get("top_gaps", []))
+            body_html = f"""
+          {f'<p class="short-desc">{short_desc}</p>' if short_desc else ''}
+          {f'<p class="match-summary">{match_summary}</p>' if match_summary else ''}
+          {f'<div class="reasons"><strong>📋 Why this score</strong><ul>{reasons_html}</ul></div>' if reasons_html else ''}
+          <div class="strengths-gaps">
+            {f'<div class="strengths"><strong>✅ Strengths</strong><ul>{strengths_html}</ul></div>' if strengths_html else ''}
+            {f'<div class="gaps"><strong>⚠️ Gaps</strong><ul>{gaps_html}</ul></div>' if gaps_html else ''}
+          </div>"""
+
+        return f"""
+        <div class="card" data-score="{score}" data-tier="{tier}" data-work="{work}"
+             data-rec="{rec}" data-applied="{is_applied_str}" data-index="{idx}"
+             style="{left_border}{new_border}{dim_style}">
           <div class="card-header">
             <div class="score-badge {score_class}">{score}</div>
             <div class="card-title-block">
-              <div class="job-title">{j.get('title','')}{new_badge}{crm_badge}</div>
-              <div class="company-name">{tier_emoji} {j.get('company','')}</div>
+              <div class="job-title">{j.get('title', '')}{new_badge}{crm_badge}</div>
+              <div class="company-name">{tier_emoji} {j.get('company', '')}</div>
             </div>
             <span class="rec-badge {rec_class}">{rec_label}</span>
           </div>
           <div class="meta-row">
             <span class="meta-tag">{work_emoji} {work_label}</span>
-            <span class="meta-tag">📍 {j.get('location','')}</span>
+            <span class="meta-tag">📍 {j.get('location', '')}</span>
             <span class="meta-tag">💰 {salary}</span>
             <span class="meta-tag tier-tag">{tier_label}</span>
-            <span class="meta-tag" style="color:{conf_color};border-color:{conf_color};" title="Confidence in this score">🎯 {confidence}% — {conf_label}</span>
+            <span class="meta-tag" style="color:{conf_color};border-color:{conf_color};"
+                  title="Confidence in this score">🎯 {confidence}% — {conf_label}</span>
           </div>
-          {f'<p class="short-desc">{short_desc}</p>' if short_desc else ''}
-          <p class="match-summary">{match_summary}</p>
-          {f'<div class="reasons"><strong>📋 Why this score</strong><ul>{reasons_html}</ul></div>' if reasons_html else ''}
-          <div class="strengths-gaps">
-            {f'<div class="strengths"><strong>✅ Strengths</strong><ul>{strengths_html}</ul></div>' if strengths_html else ''}
-            {f'<div class="gaps"><strong>⚠️ Gaps</strong><ul>{gaps_html}</ul></div>' if gaps_html else ''}
-          </div>
+          {body_html}
           <div class="card-footer">
-            <a href="{url}" target="_blank" class="apply-btn">Apply →</a>
+            {btn}
+            {f'<span style="font-size:0.72rem;color:#475569;">Seen {age}</span>' if age else ''}
           </div>
         </div>"""
+
+    action_html  = "".join(_card(j, cm, i)              for i, (j, cm) in enumerate(action_pairs))
+    archive_html = "".join(_card(j, cm, i, archived=True) for i, (j, cm) in enumerate(archive_pairs))
+
+    action_count  = len(action_pairs)
+    archive_count = len(archive_pairs)
+
+    archive_section = ""
+    if archive_pairs:
+        archive_section = f"""
+    <div class="archive-header" id="archiveToggleBtn" onclick="toggleArchive()">
+      <span>📦 Archive — applied &amp; jobs older than 7 days
+        <strong style="color:#94a3b8;">({archive_count})</strong></span>
+      <span id="archiveArrow" style="font-size:0.75rem;">▼ Show</span>
+    </div>
+    <div id="archiveGrid" class="grid hidden" style="opacity:0.75;">
+      {archive_html}
+    </div>"""
 
     return f"""
     <div class="filters" id="jobFilters">
@@ -296,13 +384,31 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
           <option value="other">Other</option>
         </select>
       </div>
-      <span class="count-badge" id="countBadge">{total} jobs shown</span>
+      <div class="filter-group">
+        <label>Sort</label>
+        <select id="sortOrder" onchange="applySort()">
+          <option value="newest">Newest first</option>
+          <option value="score">Best match</option>
+        </select>
+      </div>
+      <button id="notAppliedBtn" class="not-applied-btn" onclick="toggleNotApplied()">
+        ✉️ Not applied only
+      </button>
+      <span class="count-badge" id="countBadge">{action_count} jobs in queue</span>
+    </div>
+
+    <div class="section-label">
+      ⚡ Action queue
+      <span class="section-count" id="actionCountBadge">{action_count}</span>
+      <span style="font-size:0.75rem;color:#475569;margin-left:6px;">· Unapplied · Seen within 7 days · Newest first</span>
     </div>
 
     <div class="grid" id="grid">
-      {cards_html}
+      {action_html or '<div class="empty-state">No new unapplied jobs right now — check back after the next run.</div>'}
       <div class="empty-state hidden" id="emptyState">No jobs match your filters.</div>
-    </div>"""
+    </div>
+
+    {archive_section}"""
 
 
 # ---------------------------------------------------------------------------
@@ -757,6 +863,15 @@ def generate_dashboard(
     .crm-link:hover {{ color: #a5b4fc; }}
     .action-cell {{ max-width: 260px; color: #94a3b8; font-size: 0.8rem; line-height: 1.4; }}
     .followup-due {{ color: #fbbf24; font-weight: 600; }}
+
+    /* ── Job tab: action queue / archive sections ── */
+    .section-label {{ display: flex; align-items: center; gap: 8px; padding: 14px 32px 6px; font-size: 0.82rem; font-weight: 600; color: #94a3b8; }}
+    .section-count {{ font-size: 0.72rem; background: #1e2235; color: #64748b; border: 1px solid #2d3148; border-radius: 20px; padding: 2px 8px; }}
+    .archive-header {{ display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; cursor: pointer; background: #13151f; border-top: 1px solid #2d3148; border-bottom: 1px solid #2d3148; color: #64748b; font-size: 0.82rem; margin-top: 8px; transition: background 0.15s, color 0.15s; }}
+    .archive-header:hover {{ color: #94a3b8; background: #1a1d27; }}
+    .apply-btn-dim {{ display: inline-block; background: #1e2235; color: #64748b; font-size: 0.82rem; font-weight: 600; padding: 8px 18px; border-radius: 7px; text-decoration: none; border: 1px solid #2d3148; }}
+    .not-applied-btn {{ font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2235; color: #94a3b8; cursor: pointer; transition: all 0.2s; }}
+    .not-applied-btn.active {{ background: #0f2e1a; color: #4ade80; border-color: #166534; }}
   </style>
 </head>
 <body>
@@ -792,25 +907,60 @@ def generate_dashboard(
     btn.classList.add('active');
   }}
 
+  let notAppliedActive = false;
+  let archiveOpen = false;
+
+  function toggleNotApplied() {{
+    notAppliedActive = !notAppliedActive;
+    const btn = document.getElementById('notAppliedBtn');
+    btn.classList.toggle('active', notAppliedActive);
+    btn.textContent = notAppliedActive ? '✅ Not applied only' : '✉️ Not applied only';
+    applyFilters();
+  }}
+
+  function toggleArchive() {{
+    archiveOpen = !archiveOpen;
+    const grid = document.getElementById('archiveGrid');
+    if (grid) grid.classList.toggle('hidden', !archiveOpen);
+    const arrow = document.getElementById('archiveArrow');
+    if (arrow) arrow.textContent = archiveOpen ? '▲ Hide' : '▼ Show';
+  }}
+
+  function applySort() {{
+    const order = document.getElementById('sortOrder').value;
+    const grid  = document.getElementById('grid');
+    const cards = Array.from(grid.querySelectorAll('.card'));
+    if (order === 'score') {{
+      cards.sort((a, b) => parseInt(b.dataset.score) - parseInt(a.dataset.score));
+    }} else {{
+      cards.sort((a, b) => parseInt(a.dataset.index || 0) - parseInt(b.dataset.index || 0));
+    }}
+    cards.forEach(c => grid.appendChild(c));
+  }}
+
   function applyFilters() {{
     const minScore = parseInt(document.getElementById('scoreFilter').value);
     const rec  = document.getElementById('recFilter').value;
     const work = document.getElementById('workFilter').value;
     const tier = document.getElementById('tierFilter').value;
-    const cards = document.querySelectorAll('.card');
+    const cards = document.querySelectorAll('#grid .card');
     let visible = 0;
     cards.forEach(c => {{
       const ok = (
         parseInt(c.dataset.score) >= minScore &&
         (!rec  || c.dataset.rec  === rec)  &&
         (!work || c.dataset.work === work) &&
-        (!tier || c.dataset.tier === tier)
+        (!tier || c.dataset.tier === tier) &&
+        (!notAppliedActive || c.dataset.applied !== 'true')
       );
       c.classList.toggle('hidden', !ok);
       if (ok) visible++;
     }});
-    document.getElementById('countBadge').textContent = visible + ' jobs shown';
+    document.getElementById('countBadge').textContent = visible + ' jobs in queue';
+    const badge = document.getElementById('actionCountBadge');
+    if (badge) badge.textContent = visible;
     document.getElementById('emptyState').classList.toggle('hidden', visible > 0);
+    applySort();
   }}
 
   function filterCRM() {{
