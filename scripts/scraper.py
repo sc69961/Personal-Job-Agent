@@ -18,6 +18,14 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
+# ── Bypass macOS/system proxy settings that cause ProxyError ──
+# Python's requests picks up System Preferences → Network → Proxies automatically.
+# trust_env=False tells it to ignore those entirely.
+_noproxy = requests.Session()
+_noproxy.trust_env = False
+requests.get  = _noproxy.get   # type: ignore[method-assign]
+requests.post = _noproxy.post  # type: ignore[method-assign]
+
 logger = logging.getLogger(__name__)
 
 
@@ -192,6 +200,7 @@ def scrape_climatebase(max_jobs: int = 50) -> list[dict]:
 
     try:
         session = requests.Session()
+        session.trust_env = False
         session.headers.update(headers)
         session.get("https://climatebase.org/jobs", timeout=15)
         time.sleep(1)

@@ -22,6 +22,7 @@ ANTHROPIC_API_KEY = ""  # leave blank to use env var
 GOOGLE_CREDENTIALS_PATH = "./config/google_credentials.json"
 GOOGLE_SHEET_ID = "1kUMStZH6EOdqY7iJFJYPbuyQw5stLXcGETdE5u-mWAo"  # Paste your Sheet ID after creating it (see SETUP.md)
 GMAIL_SENDER = "steve.christianmba@gmail.com"
+GMAIL_APP_PASSWORD = ""   # set via GMAIL_APP_PASSWORD GitHub Secret
 
 # ---- SCORING CRITERIA ----
 SALARY_FLOOR = 130000

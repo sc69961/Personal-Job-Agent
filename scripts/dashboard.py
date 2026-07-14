@@ -760,6 +760,181 @@ def _build_market_tab(
 
 
 # ---------------------------------------------------------------------------
+# Performance tab — scraped jobs that never made it to Job Results
+# ---------------------------------------------------------------------------
+
+def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -> str:
+    """Shows all jobs filtered out before or after scoring."""
+    rejected = []
+    if os.path.exists(rejected_path):
+        try:
+            with open(rejected_path) as f:
+                rejected = json.load(f)
+        except Exception:
+            pass
+
+    if not rejected:
+        return (
+            '<div style="padding:60px 32px;text-align:center;color:#475569;">'
+            'No pipeline data yet — run the agent at least once to populate this tab.'
+            '</div>'
+        )
+
+    # Sort newest first by first_analyzed
+    rejected_sorted = sorted(rejected, key=lambda r: r.get("first_analyzed", ""), reverse=True)
+
+    total            = len(rejected)
+    pre_filter_count = sum(1 for r in rejected if r.get("rejection_type") == "pre_filter")
+    low_score_count  = sum(1 for r in rejected if r.get("rejection_type") == "low_score")
+    unique_companies = len({r.get("company", "") for r in rejected if r.get("company")})
+
+    # ── Build table rows ──
+    rows_html = ""
+    for r in rejected_sorted:
+        first_analyzed = r.get("first_analyzed", "")
+        date_display = ""
+        date_title_attr = ""
+        if first_analyzed:
+            try:
+                dt = datetime.fromisoformat(first_analyzed)
+                date_display    = dt.strftime("%b %d")
+                date_title_attr = dt.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                date_display    = first_analyzed[:10]
+                date_title_attr = first_analyzed
+
+        rtype = r.get("rejection_type", "")
+        if rtype == "pre_filter":
+            type_badge = (
+                '<span style="display:inline-block;font-size:0.68rem;font-weight:700;'
+                'padding:2px 8px;border-radius:5px;background:#1e1b4b;color:#818cf8;'
+                'border:1px solid #3730a3;white-space:nowrap;">Pre-filter</span>'
+            )
+        else:
+            type_badge = (
+                '<span style="display:inline-block;font-size:0.68rem;font-weight:700;'
+                'padding:2px 8px;border-radius:5px;background:#2a1f00;color:#fbbf24;'
+                'border:1px solid #78350f;white-space:nowrap;">Low score</span>'
+            )
+
+        score = r.get("score")
+        score_display = str(score) if score is not None else "—"
+        score_color   = "#f87171" if score is not None else "#475569"
+
+        url     = r.get("url", "#")
+        company = r.get("company", "")
+        title   = r.get("title", "")
+        reason  = r.get("rejection_reason", "")
+        loc_raw = r.get("location", "")
+        location = (loc_raw[:34] + "…") if len(loc_raw) > 35 else loc_raw
+        source  = r.get("source", "")
+        search_text = (company + " " + title + " " + reason).lower().replace('"', '')
+
+        rows_html += f"""
+        <tr data-type="{rtype}" data-search="{search_text}">
+          <td title="{date_title_attr}" style="white-space:nowrap;color:#64748b;font-size:0.8rem;">{date_display}</td>
+          <td style="font-weight:600;color:#f1f5f9;">{company}</td>
+          <td>
+            <a href="{url}" target="_blank" onclick="event.stopPropagation()"
+               style="color:#818cf8;text-decoration:none;font-size:0.85rem;">{title}</a>
+          </td>
+          <td>{type_badge}</td>
+          <td style="color:#94a3b8;font-size:0.78rem;max-width:260px;line-height:1.4;">{reason}</td>
+          <td style="text-align:center;color:{score_color};font-weight:600;">{score_display}</td>
+          <td style="color:#64748b;font-size:0.75rem;">{location}</td>
+          <td style="color:#475569;font-size:0.75rem;">{source}</td>
+        </tr>"""
+
+    return f"""
+<div style="padding:24px 32px;max-width:1400px;margin:0 auto;">
+
+  <!-- Stats row -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
+    <div class="stat-card">
+      <span class="stat-num">{total}</span>
+      <span class="stat-label">Total logged</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#818cf8;">{pre_filter_count}</span>
+      <span class="stat-label">Pre-filtered</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#fbbf24;">{low_score_count}</span>
+      <span class="stat-label">Low score</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#4ade80;">{unique_companies}</span>
+      <span class="stat-label">Companies seen</span>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="display:flex;gap:6px;">
+      <button onclick="filterPerf('')"           id="perfAll" class="perf-filter-btn active">All ({total})</button>
+      <button onclick="filterPerf('pre_filter')" id="perfPre" class="perf-filter-btn">Pre-filter ({pre_filter_count})</button>
+      <button onclick="filterPerf('low_score')"  id="perfLow" class="perf-filter-btn">Low Score ({low_score_count})</button>
+    </div>
+    <input type="text" id="perfSearch" placeholder="Search company, title, reason…"
+           oninput="filterPerf(currentPerfFilter())"
+           style="flex:1;min-width:200px;max-width:360px;padding:6px 12px;background:#1e2235;
+                  border:1px solid #2d3148;border-radius:6px;color:#e2e8f0;font-size:0.82rem;">
+    <span style="margin-left:auto;font-size:0.78rem;color:#475569;" id="perfCount">{total} rows</span>
+  </div>
+
+  <!-- Table -->
+  <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.83rem;" id="perfTable">
+        <thead>
+          <tr style="border-bottom:1px solid #2d3148;background:#13151f;">
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">First Analyzed</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Company</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Title</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Type</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Why Excluded</th>
+            <th style="text-align:center;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Score</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Location</th>
+            <th style="text-align:left;padding:10px 14px;color:#64748b;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">Source</th>
+          </tr>
+        </thead>
+        <tbody id="perfBody">
+          {rows_html}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {{
+  let _activeType = '';
+  window.currentPerfFilter = function() {{ return _activeType; }};
+  window.filterPerf = function(type) {{
+    _activeType = type;
+    ['perfAll','perfPre','perfLow'].forEach(function(id) {{
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('active');
+    }});
+    const btnMap = {{'': 'perfAll', 'pre_filter': 'perfPre', 'low_score': 'perfLow'}};
+    const active = document.getElementById(btnMap[type]);
+    if (active) active.classList.add('active');
+    const search = (document.getElementById('perfSearch')?.value || '').toLowerCase();
+    let visible = 0;
+    document.querySelectorAll('#perfBody tr').forEach(function(row) {{
+      const typeOk   = !type   || row.dataset.type   === type;
+      const searchOk = !search || (row.dataset.search || '').includes(search);
+      row.style.display = (typeOk && searchOk) ? '' : 'none';
+      if (typeOk && searchOk) visible++;
+    }});
+    const c = document.getElementById('perfCount');
+    if (c) c.textContent = visible + ' rows';
+  }};
+}})();
+</script>"""
+
+
+# ---------------------------------------------------------------------------
 # Full HTML page
 # ---------------------------------------------------------------------------
 
@@ -775,6 +950,7 @@ def generate_dashboard(
     jobs_tab_html   = _build_jobs_tab(jobs, run_time, crm=crm)
     crm_tab_html    = _build_crm_tab(crm)
     market_tab_html = _build_market_tab()
+    perf_tab_html   = _build_performance_tab()
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -881,6 +1057,13 @@ def generate_dashboard(
     .apply-btn-dim {{ display: inline-block; background: #1e2235; color: #64748b; font-size: 0.82rem; font-weight: 600; padding: 8px 18px; border-radius: 7px; text-decoration: none; border: 1px solid #2d3148; }}
     .not-applied-btn {{ font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2235; color: #94a3b8; cursor: pointer; transition: all 0.2s; }}
     .not-applied-btn.active {{ background: #0f2e1a; color: #4ade80; border-color: #166534; }}
+
+    /* ── Performance tab filter buttons ── */
+    .perf-filter-btn {{ font-size: 0.78rem; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2235; color: #94a3b8; cursor: pointer; transition: all 0.2s; }}
+    .perf-filter-btn.active {{ background: #1e1b4b; color: #818cf8; border-color: #3730a3; }}
+    .perf-filter-btn:hover {{ color: #c7d2fe; }}
+    #perfBody tr td {{ padding: 10px 14px; border-bottom: 1px solid #1e2235; vertical-align: top; }}
+    #perfBody tr:hover td {{ background: #1e2235; }}
   </style>
 </head>
 <body>
@@ -894,6 +1077,7 @@ def generate_dashboard(
   <button class="tab-btn active" onclick="switchTab('jobs', this)">🔍 Job Results ({len(jobs)})</button>
   <button class="tab-btn" onclick="switchTab('crm', this)">📋 Application CRM ({crm_count})</button>
   <button class="tab-btn" onclick="switchTab('market', this)">📊 Market Intel</button>
+  <button class="tab-btn" onclick="switchTab('perf', this)">📈 Performance</button>
 </div>
 
 <div id="tab-jobs" class="tab-content active">
@@ -906,6 +1090,10 @@ def generate_dashboard(
 
 <div id="tab-market" class="tab-content">
   {market_tab_html}
+</div>
+
+<div id="tab-perf" class="tab-content">
+  {perf_tab_html}
 </div>
 
 <script>

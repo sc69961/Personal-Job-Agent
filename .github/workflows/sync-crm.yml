@@ -2,9 +2,9 @@ name: CRM Sync — Gmail Status Update
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 8am MT daily (midday UTC) — catches morning email activity
-    - cron: '0 22 * * *'   # 4pm MT daily (evening UTC) — catches afternoon replies
-  workflow_dispatch:        # manual trigger from GitHub Actions tab anytime
+    - cron: '0 14 * * *'   # 8am MT daily
+    - cron: '0 22 * * *'   # 4pm MT daily
+  workflow_dispatch:
 
 jobs:
   sync-crm:
@@ -24,27 +24,44 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Restore output cache
-        uses: actions/cache@v4
-        with:
-          path: output/
-          key: job-agent-output-${{ github.run_id }}
-          restore-keys: |
-            job-agent-output-
-
       - name: Ensure directories exist
-        run: mkdir -p output public
+        run: mkdir -p output public config
 
       - name: Decode Google credentials
         run: echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > config/google_credentials.json
 
-      - name: Decode Google OAuth token
+      # Restore output cache AND OAuth token from previous run.
+      # Shares the same cache key as the main job-agent workflow so both
+      # workflows stay in sync on the token.
+      - name: Restore state cache (output + OAuth token)
+        id: restore-state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            output/
+            config/google_token.pickle
+          key: job-agent-state-${{ github.run_id }}
+          restore-keys: |
+            job-agent-state-
+
+      - name: Decode Google OAuth token (cache miss fallback)
+        if: steps.restore-state.outputs.cache-hit != 'true'
         run: echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
 
       - name: Sync Gmail CRM only
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python main.py --headless --crm-only
+
+      - name: Save state cache (output + refreshed OAuth token)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            output/
+            config/google_token.pickle
+          key: job-agent-state-${{ github.run_id }}
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools

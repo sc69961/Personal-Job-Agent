@@ -114,6 +114,10 @@ def _get_gmail_service(credentials_path: str):
             creds = pickle.load(f)
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
+        # Persist the refreshed token so the next run (including GitHub Actions)
+        # picks up the updated access token rather than re-fetching from Secrets.
+        with open(token_path, "wb") as f:
+            pickle.dump(creds, f)
     if not creds:
         raise RuntimeError("No Google token found. Run scripts/auth_google.py first.")
     return build("gmail", "v1", credentials=creds)

@@ -1,10 +1,12 @@
 """
-gmail_sender.py — Sends a daily digest email via Gmail API with the top N scored jobs,
-formatted as a clean HTML email with score badges, match summaries, and apply links.
+gmail_sender.py — Sends a daily digest email via Gmail SMTP (App Password).
+No OAuth required — uses a Gmail App Password that never expires.
+Generate one at: myaccount.google.com/apppasswords
 """
 
+import os
+import smtplib
 import logging
-import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
@@ -168,40 +170,24 @@ def build_digest_html(jobs: list[dict], run_date: str, total_scraped: int, crm: 
 </html>"""
 
 
-def _get_gmail_service(credentials_path: str):
-    """Load OAuth2 token and return an authenticated Gmail service."""
-    import os, pickle
-    from google.auth.transport.requests import Request
-    from googleapiclient.discovery import build
-
-    token_path = credentials_path.replace("google_credentials.json", "google_token.pickle")
-    if not os.path.exists(token_path):
-        raise FileNotFoundError(f"No OAuth token found at {token_path}. Run scripts/auth_google.py first.")
-
-    with open(token_path, "rb") as f:
-        creds = pickle.load(f)
-
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-
-    return build("gmail", "v1", credentials=creds)
-
-
 def send_digest(
     jobs: list[dict],
     config: dict,
     total_scraped: int,
-    credentials_path: str,
+    credentials_path: str = None,   # kept for API compatibility, unused
     crm: dict = None,
 ) -> bool:
     """
-    Send the daily digest email via Gmail API (OAuth2).
-    Returns True on success.
+    Send the daily digest email via Gmail SMTP using an App Password.
+    App Passwords never expire — no OAuth tokens to manage.
     """
-    try:
-        service = _get_gmail_service(credentials_path)
-    except Exception as e:
-        logger.error(f"Gmail auth failed: {e}")
+    app_password = config.get("GMAIL_APP_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD", "")
+    if not app_password:
+        logger.error(
+            "GMAIL_APP_PASSWORD not set. "
+            "Generate one at myaccount.google.com/apppasswords and add it to config.py "
+            "and the GMAIL_APP_PASSWORD GitHub Secret."
+        )
         return False
 
     run_date = datetime.now().strftime("%b %-d, %Y")
@@ -215,12 +201,10 @@ def send_digest(
     msg["To"]      = config["DIGEST_EMAIL_TO"]
     msg.attach(MIMEText(html_body, "html"))
 
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     try:
-        service.users().messages().send(
-            userId="me",
-            body={"raw": raw}
-        ).execute()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(config["GMAIL_SENDER"], app_password)
+            server.send_message(msg)
         logger.info(f"Digest email sent to {config['DIGEST_EMAIL_TO']}")
         return True
     except Exception as e:

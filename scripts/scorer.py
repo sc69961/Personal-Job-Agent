@@ -335,10 +335,12 @@ def score_all_jobs(
     delay_between: float = 0.5,
     cache_path: str = "./output/scored_jobs.json",
     positive_outcome_companies: list = None,
+    rejected_path: str = "./output/rejected_jobs.json",
 ) -> list[dict]:
     """
     Score every job, skipping any already scored in cache.
     Filters below min_score, returns sorted descending by score.
+    Pre-filter and low-score rejections are persisted to rejected_path.
     """
     api_key = config.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -347,12 +349,25 @@ def score_all_jobs(
     client = Anthropic(api_key=api_key)
     cache = _load_score_cache(cache_path)
 
+    # Load existing rejected jobs (keyed by id so we preserve first_analyzed across runs)
+    existing_rejected: dict = {}
+    if os.path.exists(rejected_path):
+        try:
+            with open(rejected_path) as f:
+                for r in json.load(f):
+                    if r.get("id"):
+                        existing_rejected[r["id"]] = r
+        except Exception:
+            pass
+
     scored = []
     new_count = 0
     cached_count = 0
     total = len(jobs)
+    now_iso = datetime.now().isoformat()
 
     filtered_count = 0
+    pre_filter_rejected: list = []   # list of (job, reason)
     for i, job in enumerate(jobs, 1):
         if job["id"] in cache:
             cached_job = cache[job["id"]]
@@ -363,6 +378,7 @@ def score_all_jobs(
             ok, reason = pre_filter(job, config)
             if not ok:
                 filtered_count += 1
+                pre_filter_rejected.append((job, reason))
                 print(f"  [{i}/{total}] (filtered) {job['title']} @ {job['company']} — {reason}")
                 continue
             print(f"  [{i}/{total}] Scoring: {job['title']} @ {job['company']}...", end=" ", flush=True)
@@ -375,8 +391,50 @@ def score_all_jobs(
     print(f"\n  {new_count} new scored, {cached_count} from cache, {filtered_count} pre-filtered (no tokens used)")
 
     # Filter and sort
-    qualifying = [j for j in scored if (j["score"] or 0) >= min_score]
+    qualifying       = [j for j in scored if (j["score"] or 0) >= min_score]
+    low_score_failed = [j for j in scored if (j["score"] or 0) < min_score]
     qualifying.sort(key=lambda j: j["score"], reverse=True)
+
+    # ── Persist rejected jobs ─────────────────────────────────────────────
+    def _upsert(job: dict, rtype: str, reason: str, score) -> None:
+        jid = job.get("id", "")
+        if not jid:
+            return
+        entry = existing_rejected.get(jid) or {}
+        if not entry.get("first_analyzed"):
+            entry["first_analyzed"] = now_iso
+        entry.update({
+            "id":               jid,
+            "title":            job.get("title", ""),
+            "company":          job.get("company", ""),
+            "url":              job.get("url", ""),
+            "location":         job.get("location", ""),
+            "salary_text":      job.get("salary_text", ""),
+            "source":           job.get("source", ""),
+            "rejection_type":   rtype,
+            "rejection_reason": reason,
+            "score":            score,
+            "last_analyzed":    now_iso,
+        })
+        existing_rejected[jid] = entry
+
+    for job, reason in pre_filter_rejected:
+        _upsert(job, "pre_filter", reason, None)
+
+    for job in low_score_failed:
+        reason = f"Score {job.get('score', 0)} below threshold {min_score}"
+        _upsert(job, "low_score", reason, job.get("score", 0))
+
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(rejected_path)), exist_ok=True)
+        with open(rejected_path, "w") as f:
+            json.dump(list(existing_rejected.values()), f, indent=2)
+        logger.info(
+            f"  → {len(pre_filter_rejected)} pre-filter + {len(low_score_failed)} low-score "
+            f"rejections saved ({len(existing_rejected)} total in log)"
+        )
+    except Exception as e:
+        logger.warning(f"  Could not save rejected jobs log: {e}")
 
     logger.info(
         f"Scoring complete: {len(scored)} scored, "
