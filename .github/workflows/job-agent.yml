@@ -11,6 +11,15 @@ on:
         default: 'false'
         type: boolean
 
+# CONCURRENCY GUARD
+# Only one job-agent run executes at a time. If a scheduled run and a manual
+# run overlap, the second waits in a queue (cancel-in-progress: false) rather
+# than both racing to push to the same branch. This eliminates the most common
+# cause of git lock conflicts — two concurrent runs both writing data files.
+concurrency:
+  group: job-agent-main
+  cancel-in-progress: false
+
 jobs:
   run-job-agent:
     runs-on: ubuntu-latest
@@ -81,15 +90,13 @@ jobs:
       # first_seen_registry: prevents job dates resetting on cache wipe
       # rejected_jobs: performance log (filtered/low-score history)
       # market_stats: historical PM role trend data for Market Intel tab
-      # [skip ci] in commit message prevents this commit from re-triggering the workflow.
+      # [skip ci] prevents this commit from re-triggering the workflow.
+      # git_safe_push.sh handles stale lock cleanup and push retry automatically.
       - name: Persist data files to repo
         run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          git pull --rebase origin main || true
-          git add output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "chore: update job agent data [skip ci]"
-          git push origin main || true
+          bash scripts/git_safe_push.sh \
+            "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json" \
+            "chore: update job agent data [skip ci]"
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools

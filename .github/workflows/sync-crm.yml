@@ -6,6 +6,13 @@ on:
     - cron: '0 22 * * *'   # 4pm MT daily
   workflow_dispatch:
 
+# CONCURRENCY GUARD
+# Uses a separate group from job-agent so a CRM sync never blocks a full
+# job-agent run (and vice versa). Two CRM syncs queued at once will serialize.
+concurrency:
+  group: sync-crm-main
+  cancel-in-progress: false
+
 jobs:
   sync-crm:
     runs-on: ubuntu-latest
@@ -71,14 +78,12 @@ jobs:
 
       # Persist first_seen registry — CRM sync doesn't score jobs so only
       # the registry needs saving here (rejected_jobs and market_stats unchanged).
+      # git_safe_push.sh handles stale lock cleanup and push retry automatically.
       - name: Persist data files to repo
         run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          git pull --rebase origin main || true
-          git add output/first_seen_registry.json 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "chore: update first_seen registry [skip ci]"
-          git push origin main || true
+          bash scripts/git_safe_push.sh \
+            "output/first_seen_registry.json" \
+            "chore: update first_seen registry [skip ci]"
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
