@@ -12,7 +12,7 @@ YOUR_LINKEDIN = "https://www.linkedin.com/in/steve-christian-mba/"
 DIGEST_EMAIL_TO = "steve.christianmba@gmail.com"
 
 # ---- ANTHROPIC API ----
-# Set this in your shell: export ANTHROPIC_API_KEY="sk-ant-..."
+# Set this in your shell: export ANTHROPIC_API_KEY=""  # leave blank to use env var
 # Or paste it here (not recommended for shared machines)
 ANTHROPIC_API_KEY = ""  # leave blank to use env var
 
@@ -23,6 +23,13 @@ GOOGLE_CREDENTIALS_PATH = "./config/google_credentials.json"
 GOOGLE_SHEET_ID = "1kUMStZH6EOdqY7iJFJYPbuyQw5stLXcGETdE5u-mWAo"  # Paste your Sheet ID after creating it (see SETUP.md)
 GMAIL_SENDER = "steve.christianmba@gmail.com"
 GMAIL_APP_PASSWORD = ""   # set via GMAIL_APP_PASSWORD GitHub Secret
+
+
+# ---- AWS S3 (persistent storage) ----
+S3_BUCKET_NAME     = "stevechristian-job-agent"
+AWS_REGION         = "us-east-2"
+AWS_ACCESS_KEY_ID     = ""   # injected via GitHub Secret AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY = ""   # injected via GitHub Secret AWS_SECRET_ACCESS_KEY
 
 # ---- SCORING CRITERIA ----
 SALARY_FLOOR = 130000
@@ -148,6 +155,6 @@ SCORE_WEIGHTS = {
 
 # ---- SCRAPER SETTINGS ----
 MAX_JOBS_PER_SOURCE = 50       # Cap per source per run
-MIN_SCORE_TO_INCLUDE = 55      # Jobs below this score are dropped
+MIN_SCORE_TO_INCLUDE = 40      # Jobs below this score are dropped (40-54 go to "Maybe" section)
 TOP_N_FOR_EMAIL = 15           # How many jobs go in the daily digest email
 DAYS_TO_KEEP_IN_SHEET = 30     # Jobs older than this get archived

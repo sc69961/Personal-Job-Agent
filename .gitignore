@@ -5,6 +5,10 @@ config/google_token.pickle
 # ── Runtime output (large, regenerated each run) ──────────────────────────
 output/
 !output/.gitkeep
+# Persistent data — committed to repo so they survive Actions cache expiry
+!output/first_seen_registry.json
+!output/rejected_jobs.json
+!output/market_stats.json
 
 # ── Python ────────────────────────────────────────────────────────────────
 __pycache__/

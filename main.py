@@ -46,6 +46,9 @@ def load_config() -> dict:
         TOP_N_FOR_EMAIL, YOUR_NAME, YOUR_EMAIL, YOUR_PHONE, YOUR_LINKEDIN,
         YOUR_LOCATION,
     )
+    from config.config import (
+        S3_BUCKET_NAME, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+    )
     from config.target_companies import ALL_TARGET_COMPANIES
 
     return {
@@ -71,6 +74,11 @@ def load_config() -> dict:
         "YOUR_PHONE":              YOUR_PHONE,
         "YOUR_LINKEDIN":           YOUR_LINKEDIN,
         "YOUR_LOCATION":           YOUR_LOCATION,
+        # S3 persistent storage
+        "S3_BUCKET_NAME":          os.environ.get("S3_BUCKET_NAME")          or S3_BUCKET_NAME,
+        "AWS_REGION":              os.environ.get("AWS_REGION")               or AWS_REGION,
+        "AWS_ACCESS_KEY_ID":       os.environ.get("AWS_ACCESS_KEY_ID")        or AWS_ACCESS_KEY_ID,
+        "AWS_SECRET_ACCESS_KEY":   os.environ.get("AWS_SECRET_ACCESS_KEY")    or AWS_SECRET_ACCESS_KEY,
     }
 
 
@@ -84,6 +92,12 @@ def run(args):
     logger.info("=" * 55)
 
     config = load_config()
+
+    # ── S3 RESTORE — warm local cache from permanent storage ──────────────
+    # Downloads any output files missing locally (e.g. after GitHub Actions
+    # cache expiry). Files already present are left untouched.
+    from scripts.s3_storage import restore as s3_restore, backup as s3_backup
+    s3_restore(config)
 
     # ── CRM-ONLY MODE ────────────────────────────────────────────────────
     if args.crm_only:
@@ -287,6 +301,9 @@ def run(args):
     if not args.headless:
         from scripts.dashboard import open_dashboard
         open_dashboard(scored_jobs, crm=crm)
+
+    # ── S3 BACKUP — push updated files to permanent storage ───────────────
+    s3_backup(config)
 
     logger.info("Job Agent run complete.")
 

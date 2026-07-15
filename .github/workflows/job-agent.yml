@@ -9,6 +9,8 @@ jobs:
   run-job-agent:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write   # needed to git-push persistent data files
 
     steps:
       - name: Checkout
@@ -52,6 +54,10 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: stevechristian-job-agent
+          AWS_REGION: us-east-2
         run: python main.py --headless
 
       # Save state AFTER the run — token may have been refreshed by the agent
@@ -63,6 +69,20 @@ jobs:
             output/
             config/google_token.pickle
           key: job-agent-state-${{ github.run_id }}
+
+      # Commit key data files to the repo so they survive GitHub Actions cache expiry.
+      # first_seen_registry: prevents job dates resetting on cache wipe
+      # rejected_jobs: performance log (filtered/low-score history)
+      # market_stats: historical PM role trend data for Market Intel tab
+      # [skip ci] in commit message prevents this commit from re-triggering the workflow.
+      - name: Persist data files to repo
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git pull --rebase origin main || true
+          git add output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: update job agent data [skip ci]"
+          git push origin main || true
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools

@@ -196,7 +196,7 @@ POSITIVE SIGNALS (add to score):
 - 0->1 / new product incubation: +8 pts
 - Platform or API product: +8 pts
 - AI-first organization or AI/ML product: +8 pts
-- Title match (Senior Product Manager, Staff PM, Principal PM, Director of Product, Head of Product, VP Product, Group PM, Product Lead, or semantic equivalents): +8 pts. Director/Head/VP/GM title: +5 bonus.
+- Title match (Senior Product Manager, Staff PM, Principal PM, Director of Product, Head of Product, VP Product, Group PM, Product Lead, Chief Product Officer, Head of Digital Products, Director of Innovation, or semantic equivalents): +8 pts. Director/Head/VP/GM/CPO title: +5 bonus.
 - Founding PM or first PM hire ("you'll be our first PM", "founding PM", "building the PM function"): +10 pts (high ownership signal)
 - Small PM team (2-5 PMs, high visibility, broad scope): +5 pts
 - Cross-functional leadership language ("lead cross-functional teams", "influence without authority", "executive stakeholders", "matrix leadership"): +5 pts
@@ -205,20 +205,22 @@ POSITIVE SIGNALS (add to score):
 - Experimentation/analytics culture ("experimentation", "A/B testing", "KPIs", "product analytics", "hypothesis-driven", "growth loops"): +5 pts
 - Series A/B/C startup with strong ownership signals: +5 pts
 - Fintech/payments/enterprise SaaS (moderate match): +3 pts
+- ESG / sustainability software (carbon accounting, ESG data platforms, climate reporting, net-zero management, supply chain sustainability): +8 pts
+- IoT / smart building / industrial software with genuine PM ownership scope: +3 pts
 
 {crm_signal}
 
 NEGATIVE SIGNALS (subtract from score):
 - MAJOR (-15 each): project coordination only, feature factory, requirements gathering only, Jira administration, no product ownership language
 - MINOR (-5 each): scrum ceremonies focus, release management only, backlog management only
-- Domain mismatch — company sells into healthcare/pharma/telecom/mining but role is generic PM: -10 pts
+- Domain mismatch — company sells into healthcare/pharma/telecom/mining/defense: -10 pts
+- Adjacent domain (enterprise SaaS, data platforms, IoT/smart building, logistics, construction tech): 0 pts — Steve's platform and API product skills transfer well to these industries
 - Regulated domain requiring direct expertise (FDA, medical devices, mining engineering, telecom infrastructure): -20 pts
 - Wrong function in energy (-25 pts): Role is in energy project development, energy finance, infrastructure investment, or generation commercialization — NOT software product management. Signals: requires PPA/offtake negotiation experience, EPC contractor management, utility-scale project development, technoeconomic modeling, project finance, infrastructure investment diligence, venture-style energy investing, or commercializing generation technologies. These are energy developer/financier skills Steve does not have. Apply this penalty even if the company is a strong climate/energy target company.
 - Required deep scientific/technical domain expertise (-25 pts): Role requires years of hands-on expertise in a hard science or engineering discipline Steve does not have. Signals: "8+ years in [scientific field]", requires deep expertise in meteorology/NWP/atmospheric science/GNSS-RO, geospatial/remote sensing, genomics, materials science, radar/satellite data processing, climate modeling, or similar. Apply even if the job title is "Product Manager" — domain expertise as a hard requirement disqualifies regardless of PM function.
 - Salary clearly below $130K floor: -20 pts
 - Fully on-site outside Denver/Boulder/Colorado: -15 pts
 - Junior/APM/intern role: score < 25
-- Large PM organization (50+ PMs, highly matrixed, limited strategic scope per PM): -5 pts
 - Vague/generic JD (no specific product domain, no ownership language, no team structure — reads like a copy-paste template): -10 pts and set confidence below 40
 
 CONFIDENCE GUIDANCE:
@@ -328,6 +330,27 @@ def _load_score_cache(cache_path: str) -> dict:
     return {}
 
 
+def _load_first_seen_registry(registry_path: str = "./output/first_seen_registry.json") -> dict:
+    """Load job_id → first_seen_iso map. Persists independently of the scoring cache."""
+    if os.path.exists(registry_path):
+        try:
+            with open(registry_path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_first_seen_registry(registry: dict, registry_path: str = "./output/first_seen_registry.json") -> None:
+    """Persist the first_seen registry to disk."""
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(registry_path)), exist_ok=True)
+        with open(registry_path, "w") as f:
+            json.dump(registry, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save first_seen_registry: {e}")
+
+
 def score_all_jobs(
     jobs: list[dict],
     config: dict,
@@ -348,6 +371,9 @@ def score_all_jobs(
 
     client = Anthropic(api_key=api_key)
     cache = _load_score_cache(cache_path)
+
+    # Load first_seen registry — survives scored_jobs.json wipes
+    first_seen_registry = _load_first_seen_registry()
 
     # Load existing rejected jobs (keyed by id so we preserve first_analyzed across runs)
     existing_rejected: dict = {}
@@ -371,6 +397,10 @@ def score_all_jobs(
     for i, job in enumerate(jobs, 1):
         if job["id"] in cache:
             cached_job = cache[job["id"]]
+            # Preserve first_seen in registry so cache wipes don't reset it
+            fs = cached_job.get("first_seen")
+            if fs and cached_job.get("id"):
+                first_seen_registry.setdefault(cached_job["id"], fs)
             scored.append(cached_job)
             cached_count += 1
             print(f"  [{i}/{total}] (cached) {job['title']} @ {job['company']} → {cached_job['score']}")
@@ -383,6 +413,15 @@ def score_all_jobs(
                 continue
             print(f"  [{i}/{total}] Scoring: {job['title']} @ {job['company']}...", end=" ", flush=True)
             job = score_job(job, config, client, positive_outcome_companies)
+            # Apply registry first_seen so re-scores don't reset the archive clock
+            jid = job.get("id", "")
+            if jid:
+                if jid in first_seen_registry:
+                    job["first_seen"] = first_seen_registry[jid]
+                else:
+                    fs = job.get("first_seen") or datetime.now().isoformat()
+                    job["first_seen"] = fs
+                    first_seen_registry[jid] = fs
             print(f"→ {job['score']}")
             scored.append(job)
             new_count += 1
@@ -394,6 +433,9 @@ def score_all_jobs(
     qualifying       = [j for j in scored if (j["score"] or 0) >= min_score]
     low_score_failed = [j for j in scored if (j["score"] or 0) < min_score]
     qualifying.sort(key=lambda j: j["score"], reverse=True)
+
+    # Save first_seen registry so dates survive future cache wipes
+    _save_first_seen_registry(first_seen_registry)
 
     # ── Persist rejected jobs ─────────────────────────────────────────────
     def _upsert(job: dict, rtype: str, reason: str, score) -> None:

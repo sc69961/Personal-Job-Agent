@@ -220,19 +220,26 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
     # ── Sort: NEW first (within 24h), then by score descending ──
     sorted_jobs = sorted(jobs, key=lambda j: (0 if _is_new(j) else 1, -j.get("score", 0)))
 
-    # ── Split into action queue vs. archive ──
+    # ── Split into action queue / maybe / archive ──
     # Archive = has CRM match (already applied) OR older than 7 days
+    # Maybe   = score 40–54, not stale, not yet applied
+    # Action  = score 55+, not stale, not yet applied
+    DISPLAY_THRESHOLD = 55
     action_pairs = []   # (job, crm_match)
+    maybe_pairs  = []   # (job, crm_match)  score 40–54
     archive_pairs = []  # (job, crm_match)
 
     for j in sorted_jobs:
         co_key    = _normalize(j.get("company", ""))
         title_key = _normalize_title(j.get("title", ""))
         crm_match = crm_by_title.get((co_key, title_key))
+        score     = j.get("score", 0)
         if crm_match or _is_stale(j):
             archive_pairs.append((j, crm_match))
-        else:
+        elif score >= DISPLAY_THRESHOLD:
             action_pairs.append((j, crm_match))
+        else:
+            maybe_pairs.append((j, crm_match))
 
     # ── Card builder ──
     def _card(j, crm_match, idx: int, archived: bool = False) -> str:
@@ -336,10 +343,24 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
         </div>"""
 
     action_html  = "".join(_card(j, cm, i)              for i, (j, cm) in enumerate(action_pairs))
+    maybe_html   = "".join(_card(j, cm, i)              for i, (j, cm) in enumerate(maybe_pairs))
     archive_html = "".join(_card(j, cm, i, archived=True) for i, (j, cm) in enumerate(archive_pairs))
 
     action_count  = len(action_pairs)
+    maybe_count   = len(maybe_pairs)
     archive_count = len(archive_pairs)
+
+    maybe_section = ""
+    if maybe_pairs:
+        maybe_section = f"""
+    <div class="archive-header" id="maybeToggleBtn" onclick="toggleMaybe()">
+      <span>🤔 Maybe — scored 40–54, worth a closer look
+        <strong style="color:#fbbf24;">({maybe_count})</strong></span>
+      <span id="maybeArrow" style="font-size:0.75rem;">▼ Show</span>
+    </div>
+    <div id="maybeGrid" class="grid hidden">
+      {maybe_html}
+    </div>"""
 
     archive_section = ""
     if archive_pairs:
@@ -411,6 +432,8 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
       {action_html or '<div class="empty-state">No new unapplied jobs right now — check back after the next run.</div>'}
       <div class="empty-state hidden" id="emptyState">No jobs match your filters.</div>
     </div>
+
+    {maybe_section}
 
     {archive_section}"""
 
@@ -1118,6 +1141,16 @@ def generate_dashboard(
     btn.classList.toggle('active', notAppliedActive);
     btn.textContent = notAppliedActive ? '✅ Not applied only' : '✉️ Not applied only';
     applyFilters();
+  }}
+
+  let maybeOpen = false;
+
+  function toggleMaybe() {{
+    maybeOpen = !maybeOpen;
+    const grid = document.getElementById('maybeGrid');
+    if (grid) grid.classList.toggle('hidden', !maybeOpen);
+    const arrow = document.getElementById('maybeArrow');
+    if (arrow) arrow.textContent = maybeOpen ? '▲ Hide' : '▼ Show';
   }}
 
   function toggleArchive() {{

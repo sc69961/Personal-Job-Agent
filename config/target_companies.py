@@ -46,6 +46,11 @@ CLIMATETECH_COMPANIES = [
 
     # Building Electrification
     "Dandelion Energy", "BlocPower", "Quilt",
+
+    # ESG / Sustainability Software (carbon accounting, ESG data, net-zero platforms)
+    "Watershed", "Persefoni", "Measurabl", "Sweep", "Greenly",
+    "Terrascope", "Sphera", "Sustain.Life", "EcoVadis",
+    "Workiva", "Diligent", "Intelex",
 ]
 
 # Tier 2: Fintech / AI / high-growth startups (weight: 1.0x)
@@ -69,6 +74,14 @@ FINTECH_AI_COMPANIES = [
 
     # Infrastructure Software
     "Sitetracker", "Procore", "ServiceTitan",
+
+    # Data Platform & Analytics (strong PM culture, platform products)
+    "dbt Labs", "Amplitude", "Monte Carlo", "Fivetran",
+    "Retool", "Rippling", "Figma",
+
+    # IoT / Smart Building Software
+    "Honeywell Forge", "Johnson Controls OpenBlue", "Turntide Technologies",
+    "Willow", "Gridium",
 ]
 
 # All company names flattened (used for matching)
@@ -188,6 +201,32 @@ COMPANY_CAREER_URLS = {
     "Plaid":                "https://jobs.lever.co/plaid",
     "Marqeta":              "https://job-boards.greenhouse.io/marqeta",              # fixed: was HTML
     "Modern Treasury":      "https://jobs.ashbyhq.com/modern-treasury",             # fixed: was HTML
+
+    # --- ESG / Sustainability Software ---
+    "Watershed":            "https://jobs.ashbyhq.com/watershed",
+    "Persefoni":            "https://job-boards.greenhouse.io/persefoni",
+    "Measurabl":            "https://job-boards.greenhouse.io/measurabl",
+    "Sweep":                "https://jobs.lever.co/sweep",
+    "Greenly":              "https://jobs.lever.co/greenly",
+    "Terrascope":           "https://jobs.ashbyhq.com/terrascope",
+    "Sphera":               "https://job-boards.greenhouse.io/sphera",
+    "EcoVadis":             "https://job-boards.greenhouse.io/ecovadis",
+    "Workiva":              "https://workiva.wd1.myworkdayjobs.com/Workiva",
+    "Diligent":             "https://job-boards.greenhouse.io/diligent",
+
+    # --- Data Platform & Analytics ---
+    "dbt Labs":             "https://job-boards.greenhouse.io/dbtlabs",
+    "Amplitude":            "https://job-boards.greenhouse.io/amplitude",
+    "Monte Carlo":          "https://jobs.lever.co/montecarlodata",
+    "Fivetran":             "https://job-boards.greenhouse.io/fivetran",
+    "Retool":               "https://jobs.ashbyhq.com/retool",
+    "Rippling":             "https://jobs.ashbyhq.com/rippling",
+    "Figma":                "https://job-boards.greenhouse.io/figma",
+
+    # --- IoT / Smart Building Software ---
+    "Turntide Technologies": "https://job-boards.greenhouse.io/turntide",
+    "Willow":               "https://jobs.lever.co/willowtwin",
+    "Gridium":              "https://jobs.lever.co/gridium",
 }
 
 def get_company_tier(company_name: str) -> str:
