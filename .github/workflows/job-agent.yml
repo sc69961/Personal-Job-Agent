@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '30 12 * * *'   # 6:30 AM MT daily
   workflow_dispatch:
+    inputs:
+      force_email:
+        description: 'Force email even if already sent today'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
   run-job-agent:
@@ -58,6 +64,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_BUCKET_NAME: stevechristian-job-agent
           AWS_REGION: us-east-2
+          FORCE_EMAIL: ${{ github.event.inputs.force_email }}
         run: python main.py --headless
 
       # Save state AFTER the run — token may have been refreshed by the agent

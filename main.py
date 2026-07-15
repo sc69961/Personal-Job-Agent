@@ -268,16 +268,18 @@ def run(args):
     logger.info("Step 5/5 — Sending Gmail digest...")
 
     # Daily email cap — one digest per calendar day regardless of run frequency
+    # Override with: --email-only flag (CLI) or FORCE_EMAIL=true env var (Actions manual trigger)
     email_flag_path = "./output/last_email_sent.txt"
     today = datetime.now().strftime("%Y-%m-%d")
+    force_email = args.email_only or os.environ.get("FORCE_EMAIL", "").lower() in ("true", "1", "yes")
     already_sent_today = False
-    if os.path.exists(email_flag_path) and not args.email_only:
+    if os.path.exists(email_flag_path) and not force_email:
         with open(email_flag_path) as f:
             already_sent_today = f.read().strip() == today
 
     if already_sent_today:
-        logger.info("  → Digest already sent today — skipping to avoid duplicate emails")
-    elif not new_jobs and not args.email_only:
+        logger.info("  → Digest already sent today — skipping (use FORCE_EMAIL=true or --email-only to override)")
+    elif not new_jobs and not force_email:
         logger.info("  → No new jobs this run — skipping email to avoid noise")
     else:
         try:

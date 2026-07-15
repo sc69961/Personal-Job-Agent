@@ -572,3 +572,82 @@ class TestScoreAllJobs:
         scores = [r["score"] for r in results]
         assert scores == sorted(scores, reverse=True)
         assert scores[0] == 88
+
+
+# ---------------------------------------------------------------------------
+# Scoring prompt — new signals added in recent sprint
+# ---------------------------------------------------------------------------
+
+class TestScoringPromptNewSignals:
+    """Verify that scoring prompt changes from the recent sprint are present:
+    - ESG / sustainability software signal (+8 pts) added
+    - Large PM org penalty (-5 pts) removed
+    - Adjacent domain (SaaS, data, IoT) explicitly gets 0 pts penalty
+    - Expanded title list includes CPO, Head of Digital Products, Director of Innovation
+    """
+
+    def test_esg_signal_present_with_plus_8(self, config):
+        """ESG / sustainability software should be a +8 positive signal."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "ESG" in prompt
+        assert "sustainability software" in prompt
+        assert "+8 pts" in prompt
+
+    def test_esg_signal_mentions_carbon_accounting(self, config):
+        """The ESG signal should name carbon accounting as an example."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "carbon accounting" in prompt
+
+    def test_no_large_pm_org_penalty_in_prompt(self, config):
+        """The large PM org / highly matrixed penalty (-5 pts) should be removed."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        # Should not contain any reference to the old penalty
+        assert "Large PM organization" not in prompt
+        assert "highly matrixed" not in prompt
+        assert "limited strategic scope per PM" not in prompt
+
+    def test_adjacent_domain_gets_zero_penalty(self, config):
+        """Adjacent industries (enterprise SaaS, data platforms, IoT) should explicitly
+        get 0 pts — not be grouped with penalised domains."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "Adjacent domain" in prompt
+        assert "0 pts" in prompt
+        # Key adjacent industries should be listed
+        assert "enterprise SaaS" in prompt
+        assert "IoT" in prompt or "IoT/smart building" in prompt
+
+    def test_domain_mismatch_still_penalises_healthcare_pharma(self, config):
+        """Healthcare, pharma, telecom, mining, defense should still carry the domain penalty."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "healthcare" in prompt or "pharma" in prompt
+        assert "Domain mismatch" in prompt or "domain mismatch" in prompt.lower()
+
+    def test_title_list_includes_cpo(self, config):
+        """Chief Product Officer should be in the title match list."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "Chief Product Officer" in prompt
+
+    def test_title_list_includes_head_of_digital_products(self, config):
+        """Head of Digital Products should be in the title match list."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "Head of Digital Products" in prompt
+
+    def test_title_list_includes_director_of_innovation(self, config):
+        """Director of Innovation should be in the title match list."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "Director of Innovation" in prompt
+
+    def test_iot_smart_building_positive_signal_present(self, config):
+        """IoT / smart building software should appear as a positive signal."""
+        job = make_job()
+        prompt = build_scoring_prompt(job, config["RESUME_TEXT"], config)
+        assert "IoT" in prompt
+        assert "smart building" in prompt

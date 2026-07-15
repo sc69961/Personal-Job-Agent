@@ -66,7 +66,6 @@ def restore(config: dict) -> None:
         logger.warning(f"S3: could not initialise client — {e}")
         return
 
-    os.makedirs("output", exist_ok=True)
     downloaded, skipped = 0, 0
     for local_path in S3_FILES:
         key = os.path.basename(local_path)
@@ -74,15 +73,19 @@ def restore(config: dict) -> None:
             logger.info(f"S3 restore: {key} already local — skipping")
             skipped += 1
             continue
+        # Ensure parent directory exists before downloading
+        os.makedirs(os.path.dirname(os.path.abspath(local_path)), exist_ok=True)
         try:
             s3.download_file(bucket, key, local_path)
-            size_kb = os.path.getsize(local_path) // 1024
+            size_kb = os.path.getsize(local_path) // 1024 if os.path.exists(local_path) else 0
             logger.info(f"S3 restore: downloaded {key} ({size_kb} KB)")
             downloaded += 1
-        except s3.exceptions.NoSuchKey if hasattr(s3, 'exceptions') else Exception:
-            logger.info(f"S3 restore: {key} not in bucket yet — will be created after this run")
         except Exception as e:
-            logger.info(f"S3 restore: {key} not found — {e}")
+            err = str(e)
+            if "NoSuchKey" in err or "404" in err or "does not exist" in err.lower():
+                logger.info(f"S3 restore: {key} not in bucket yet — will be created after this run")
+            else:
+                logger.info(f"S3 restore: {key} not found — {e}")
 
     logger.info(f"S3 restore complete — {downloaded} downloaded, {skipped} already local from s3://{bucket}/")
 
