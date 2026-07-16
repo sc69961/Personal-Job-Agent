@@ -109,6 +109,29 @@ def pipeline_summary_html(crm: dict) -> str:
           <ul style="font-size:12px;margin:0;padding-left:18px;color:#555;">{items}</ul>{more}
         </div>"""
 
+    # Applications where CRM matching had low confidence — needs manual check
+    needs_review = [a for a in apps if a.get("needs_review")]
+    review_html = ""
+    if needs_review:
+        items = "".join(
+            f"<li style='margin:3px 0;'><strong>{a.get('company','?')}</strong>"
+            f" — {a.get('job_title','?') or '<em>title unknown</em>'}"
+            f"{': ' + a['match_reasoning'] if a.get('match_reasoning') else ''}</li>"
+            for a in needs_review[:5]
+        )
+        more = f"<li style='color:#888'>+{len(needs_review)-5} more</li>" if len(needs_review) > 5 else ""
+        review_html = f"""
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #dde3ea;
+                    background:#fff8f0;border-radius:6px;padding:10px 14px;">
+          <div style="font-size:12px;font-weight:bold;color:#92400e;margin-bottom:4px;">
+            ⚠ {len(needs_review)} CRM match{'es' if len(needs_review)>1 else ''} need your review:
+          </div>
+          <div style="font-size:11px;color:#78716c;margin-bottom:6px;">
+            Low-confidence email → application matches. Check the CRM tab to verify.
+          </div>
+          <ul style="font-size:12px;margin:0;padding-left:18px;color:#555;">{items}{more}</ul>
+        </div>"""
+
     return f"""
     <div style="background:#fff;border:1px solid #dde3ea;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:bold;color:#1a3a5c;margin-bottom:10px;">📊 Pipeline Snapshot</div>
@@ -135,6 +158,7 @@ def pipeline_summary_html(crm: dict) -> str:
         </div>
       </div>
       {followup_html}
+      {review_html}
     </div>"""
 
 

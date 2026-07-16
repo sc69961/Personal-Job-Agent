@@ -49,6 +49,19 @@ STATUS_PRIORITY = [
 GHOST_AFTER_DAYS = 30
 
 
+# Generic email domains that are NOT company identifiers
+_GENERIC_DOMAINS = {
+    "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com",
+    "me.com", "aol.com", "protonmail.com", "live.com", "msn.com",
+    # ATS / recruiting platforms — not company domains
+    "greenhouse.io", "lever.co", "ashbyhq.com", "workday.com",
+    "myworkdayjobs.com", "icims.com", "taleo.net", "successfactors.com",
+    "smartrecruiters.com", "jobvite.com", "brassring.com", "kenexa.com",
+    "recruitee.com", "bamboohr.com", "rippling.com", "workable.com",
+    "linkedin.com", "indeed.com", "glassdoor.com",
+}
+
+
 # ---------------------------------------------------------------------------
 # Company name normalization — strips legal suffixes so variants match
 # ---------------------------------------------------------------------------
@@ -100,6 +113,65 @@ def _should_upgrade_status(current: str, new: str) -> bool:
         return STATUS_PRIORITY.index(new) > STATUS_PRIORITY.index(current)
     except ValueError:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Domain-based matching helpers
+# ---------------------------------------------------------------------------
+
+def _extract_sender_domains(messages: list) -> set:
+    """
+    Pull unique company-owned email domains from all message senders.
+    Excludes generic providers (Gmail, Yahoo) and ATS platforms (Greenhouse,
+    Lever, Ashby) so we only match on real company domains.
+    """
+    domains = set()
+    for msg in messages:
+        headers = msg.get("payload", {}).get("headers", [])
+        from_header = _header(headers, "from")
+        # Extract address from "Name <addr@domain.com>" or "addr@domain.com"
+        match = re.search(r'[\w.+-]+@([\w.-]+\.[a-zA-Z]{2,})', from_header)
+        if match:
+            domain = match.group(1).lower()
+            if domain not in _GENERIC_DOMAINS:
+                domains.add(domain)
+    return domains
+
+
+def _build_domain_map(app_by_id: dict) -> dict:
+    """
+    Build {email_domain: [app_id, ...]} from domains already stored on CRM entries.
+    Used to match new threads to existing applications by recruiter email domain.
+    """
+    domain_map: dict = {}
+    for app_id, app in app_by_id.items():
+        for domain in app.get("sender_domains", []):
+            domain_map.setdefault(domain, []).append(app_id)
+    return domain_map
+
+
+def _find_existing_by_domain(
+    sender_domains: set, domain_map: dict, app_by_id: dict
+) -> Optional[dict]:
+    """
+    Return the CRM entry whose stored sender domains intersect with the
+    current thread's sender domains.  If multiple entries match (shouldn't
+    happen often), prefer the one with the highest-priority status.
+    """
+    candidates = []
+    for domain in sender_domains:
+        for app_id in domain_map.get(domain, []):
+            app = app_by_id.get(app_id)
+            if app and app not in candidates:
+                candidates.append(app)
+    if not candidates:
+        return None
+
+    def status_rank(a):
+        s = a.get("status", "applied")
+        return STATUS_PRIORITY.index(s) if s in STATUS_PRIORITY else 0
+
+    return sorted(candidates, key=status_rank, reverse=True)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -168,9 +240,48 @@ def _summarize_thread(messages: list) -> str:
 # Claude analysis
 # ---------------------------------------------------------------------------
 
-def _analyze_thread(thread_text: str, client: Anthropic):
-    prompt = f"""You are analyzing an email thread to determine if it's related to a job application.
+def _analyze_thread(
+    thread_text: str,
+    client: Anthropic,
+    active_applications: list = None,
+) -> Optional[dict]:
+    """
+    Ask Claude to classify a Gmail thread.
 
+    active_applications — list of dicts with keys: company, job_title, applied_date, status.
+    When provided, Claude can identify which existing application a vague recruiter
+    reply belongs to (e.g. "Following up" with no job title in the subject).
+
+    Returns a dict, or None if the thread is not job-related.
+
+    New fields in the returned dict:
+      confidence      : int 0-100. How sure Claude is about the company/title/status.
+      needs_review    : bool. True when confidence < 70 or the match is ambiguous.
+      match_reasoning : str. Brief explanation of how Claude identified the match.
+      matched_company : str or "". If Claude matched to an existing application,
+                        the company name of that match.
+      matched_title   : str or "". Same for job title.
+    """
+    # Build active applications context block
+    if active_applications:
+        app_lines = "\n".join(
+            f"  - {a.get('company', '?')} | {a.get('job_title', '?')} "
+            f"| applied {a.get('applied_date', '?')} | status: {a.get('status', '?')}"
+            for a in active_applications
+        )
+        active_context = f"""
+STEVE'S ACTIVE APPLICATIONS (use this to match vague recruiter emails to the right role):
+{app_lines}
+
+If this email is clearly about one of the above applications (even if the subject
+doesn't name the role), set matched_company and matched_title to that entry.
+If you can't confidently match it, leave them as empty strings.
+"""
+    else:
+        active_context = ""
+
+    prompt = f"""You are analyzing an email thread to determine if it's related to a job application.
+{active_context}
 EMAIL THREAD:
 {thread_text[:3500]}
 
@@ -179,7 +290,7 @@ If this thread is NOT related to a job application, return exactly: null
 If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
 
 {{
-  "job_title": "<job title applied for — check the subject line, email body, and any 'Re:' lines. If you see a specific role name, use it. Only use empty string if truly impossible to determine>",
+  "job_title": "<job title applied for — check the subject line, email body, and any 'Re:' lines. If you see a specific role name, use it. If you matched to an existing application, use that application's title. Only use empty string if truly impossible to determine>",
   "company": "<company name — strip legal suffixes like Inc, LLC, Corp from display but return the clean name>",
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
   "status": "<Choose ONE — read carefully:
@@ -192,7 +303,16 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
   "status_label": "<one of: Applied | Response Received | Interview Requested | Rejected | Offer Received | Withdrawn>",
   "last_activity": "<YYYY-MM-DD of the most recent email in thread>",
   "follow_up_date": "<YYYY-MM-DD — if no response yet, suggest following up in 7-10 business days from last_activity; if interview scheduled, put that date; if rejected or offer, leave empty>",
-  "recommended_action": "<1 concise sentence: the single most important action Steve should take right now>"
+  "recommended_action": "<1 concise sentence: the single most important action Steve should take right now>",
+  "confidence": <integer 0-100 — how confident are you in the company, job title, and status classification?
+    90-100: subject line or body explicitly names the role and company; status signal is unambiguous
+    70-89:  company is clear but role is inferred; or status has one ambiguous signal
+    50-69:  role or company inferred from context; recruiter email with no explicit job reference
+    below 50: guessing based on timing or partial signals — Steve should verify>,
+  "needs_review": <true if confidence < 70 OR if there are multiple possible matching applications at the same company OR if the job title is empty>,
+  "match_reasoning": "<1 sentence: how you identified which application this belongs to, or why you're uncertain>",
+  "matched_company": "<if you matched this to one of Steve's existing applications, the company name — else empty string>",
+  "matched_title": "<if you matched this to one of Steve's existing applications, the job title — else empty string>"
 }}
 
 IMPORTANT for job_title: Look carefully at the email subject lines (especially lines starting with 'Subject:', 'Re:', or 'Fwd:'). The role name is almost always mentioned. If the subject says 'Thank you for applying to Senior Product Manager at Acme', the job_title is 'Senior Product Manager'. Never leave job_title blank if the role name appears anywhere in the thread.
@@ -201,7 +321,7 @@ IMPORTANT for offer: Be very conservative. If you are not 100% certain this is a
     try:
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=400,
+            max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = resp.content[0].text.strip()
@@ -211,7 +331,12 @@ IMPORTANT for offer: Be very conservative. If you are not 100% certain this is a
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
-        return json.loads(raw.strip())
+        result = json.loads(raw.strip())
+        # Ensure needs_review is set correctly even if Claude omitted it
+        if "confidence" in result:
+            if result["confidence"] < 70 or not result.get("job_title"):
+                result["needs_review"] = True
+        return result
     except Exception as e:
         logger.debug(f"Claude analysis failed: {e}")
         return None
@@ -275,7 +400,11 @@ def sync_gmail_crm(config: dict) -> dict:
     seen_thread_ids = {tid for app in crm["applications"] for tid in app.get("thread_ids", [])}
     app_by_id = {app["id"]: app for app in crm["applications"]}
 
+    # Build domain → app_id map for recruiter email domain matching
+    domain_map = _build_domain_map(app_by_id)
+
     processed = 0
+    needs_review_count = 0
 
     # -----------------------------------------------------------------------
     # Pass 0: Re-scan existing active application threads for status updates.
@@ -305,18 +434,30 @@ def sync_gmail_crm(config: dict) -> dict:
                     except Exception:
                         pass  # can't parse dates — re-analyze anyway
                     summary = _summarize_thread(messages)
-                    result  = _analyze_thread(summary, client)
+                    active_apps = [
+                        {"company": a.get("company"), "job_title": a.get("job_title"),
+                         "applied_date": a.get("applied_date"), "status": a.get("status")}
+                        for a in crm["applications"]
+                        if a.get("status") in RESCAN_STATUSES
+                    ]
+                    result  = _analyze_thread(summary, client, active_applications=active_apps)
                     if not result:
                         continue
                     new_status = result.get("status", "applied")
                     if _should_upgrade_status(app.get("status", "applied"), new_status):
                         logger.info(f"  Thread rescan: {app.get('company')} '{app.get('job_title')}' "
-                                    f"{app['status']} → {new_status}")
-                        app["status"]       = new_status
-                        app["status_label"] = result.get("status_label", app.get("status_label", ""))
-                        app["last_activity"] = result.get("last_activity", app.get("last_activity", ""))
-                        app["notes"]         = result.get("notes", app.get("notes", ""))
+                                    f"{app['status']} → {new_status} "
+                                    f"(confidence {result.get('confidence', '?')})")
+                        app["status"]             = new_status
+                        app["status_label"]       = result.get("status_label", app.get("status_label", ""))
+                        app["last_activity"]      = result.get("last_activity", app.get("last_activity", ""))
+                        app["notes"]              = result.get("notes", app.get("notes", ""))
                         app["recommended_action"] = result.get("recommended_action", "")
+                        app["confidence"]         = result.get("confidence", 80)
+                        if result.get("needs_review"):
+                            app["needs_review"]   = True
+                            app["match_reasoning"] = result.get("match_reasoning", "")
+                            needs_review_count += 1
                         processed += 1
                 except Exception as e:
                     logger.debug(f"  Thread rescan failed for {tid}: {e}")
@@ -335,43 +476,94 @@ def sync_gmail_crm(config: dict) -> dict:
                     continue
                 seen_thread_ids.add(tid)
 
-                thread  = service.users().threads().get(userId="me", id=tid, format="full").execute()
-                summary = _summarize_thread(thread.get("messages", []))
-                result  = _analyze_thread(summary, client)
+                thread   = service.users().threads().get(userId="me", id=tid, format="full").execute()
+                messages = thread.get("messages", [])
+                summary  = _summarize_thread(messages)
+
+                # Extract company-owned sender domains from this thread
+                thread_domains = _extract_sender_domains(messages)
+
+                # Build active applications context for Claude
+                active_apps = [
+                    {"company": a.get("company"), "job_title": a.get("job_title"),
+                     "applied_date": a.get("applied_date"), "status": a.get("status")}
+                    for a in crm["applications"]
+                    if a.get("status") not in ("rejected", "withdrawn", "ghosted")
+                ]
+
+                result = _analyze_thread(summary, client, active_applications=active_apps)
 
                 if not result:
                     continue
 
-                company   = result.get("company", "")
-                job_title = result.get("job_title", "")
+                company    = result.get("company", "")
+                job_title  = result.get("job_title", "")
                 new_status = result.get("status", "applied")
+                confidence = result.get("confidence", 80)
+                flag_review = result.get("needs_review", False)
+                reasoning  = result.get("match_reasoning", "")
 
-                # Primary match: exact company+title hash
-                aid = _app_id(company, job_title)
+                # ── Three-layer matching (most → least reliable) ──────────
+                # 1. Recruiter email domain — catches recruiter replies on new
+                #    threads that have no job title in the subject
+                app = _find_existing_by_domain(thread_domains, domain_map, app_by_id)
 
-                if aid in app_by_id:
-                    app = app_by_id[aid]
-                else:
-                    # Secondary match: same normalized company name (catches cross-thread status updates)
+                # 2. If Claude identified a specific existing application, honour it
+                if not app:
+                    m_co    = result.get("matched_company", "")
+                    m_title = result.get("matched_title", "")
+                    if m_co and m_title:
+                        candidate_id = _app_id(m_co, m_title)
+                        app = app_by_id.get(candidate_id)
+
+                # 3. Exact company+title hash
+                if not app:
+                    aid = _app_id(company, job_title)
+                    app = app_by_id.get(aid)
+
+                # 4. Company-name-only fallback
+                if not app:
                     app = _find_existing_by_company(company, app_by_id)
 
                 if app:
-                    # Update mutable fields — only upgrade status, never downgrade
+                    # Merge sender domains into the matched entry so future
+                    # recruiter replies on new threads are found by domain
+                    existing_domains = set(app.get("sender_domains", []))
+                    existing_domains.update(thread_domains)
+                    app["sender_domains"] = list(existing_domains)
+                    # Refresh domain map with newly discovered domains
+                    for d in thread_domains:
+                        domain_map.setdefault(d, [])
+                        if app["id"] not in domain_map[d]:
+                            domain_map[d].append(app["id"])
+
                     if _should_upgrade_status(app.get("status", "applied"), new_status):
                         app["status"]       = new_status
                         app["status_label"] = result.get("status_label", app["status_label"])
-                    app["last_activity"]      = result.get("last_activity", app.get("last_activity", ""))
-                    # Fill in missing job title if we now have one
-                    if not app.get("job_title") and job_title:
-                        app["job_title"] = job_title
-                    # Fill in missing URL
-                    if not app.get("job_url"):
-                        app["job_url"] = _try_match_url(company)
-                    if _should_upgrade_status(app.get("status", "applied"), new_status):
                         app["follow_up_date"]     = result.get("follow_up_date", app.get("follow_up_date", ""))
                         app["recommended_action"] = result.get("recommended_action", app.get("recommended_action", ""))
+
+                    app["last_activity"] = result.get("last_activity", app.get("last_activity", ""))
+                    app["confidence"]    = confidence
+
+                    if not app.get("job_title") and job_title:
+                        app["job_title"] = job_title
+                    if not app.get("job_url"):
+                        app["job_url"] = _try_match_url(company)
+                    if flag_review:
+                        app["needs_review"]    = True
+                        app["match_reasoning"] = reasoning
+                        needs_review_count += 1
+                        logger.info(f"  ⚠ Low confidence ({confidence}) match: "
+                                    f"{company} '{job_title}' — {reasoning}")
+                    else:
+                        app.pop("needs_review", None)
+                        app.pop("match_reasoning", None)
+
                     app.setdefault("thread_ids", []).append(tid)
+
                 else:
+                    aid = _app_id(company, job_title)
                     new_app = {
                         "id":                 aid,
                         "job_title":          job_title,
@@ -383,11 +575,22 @@ def sync_gmail_crm(config: dict) -> dict:
                         "last_activity":      result.get("last_activity", ""),
                         "follow_up_date":     result.get("follow_up_date", ""),
                         "recommended_action": result.get("recommended_action", ""),
+                        "confidence":         confidence,
+                        "needs_review":       flag_review,
+                        "match_reasoning":    reasoning if flag_review else "",
                         "notes":              "",
                         "thread_ids":         [tid],
+                        "sender_domains":     list(thread_domains),
                     }
+                    if flag_review:
+                        needs_review_count += 1
+                        logger.info(f"  ⚠ New entry, low confidence ({confidence}): "
+                                    f"{company} '{job_title}' — {reasoning}")
                     crm["applications"].append(new_app)
                     app_by_id[aid] = new_app
+                    # Register domains for future matching
+                    for d in thread_domains:
+                        domain_map.setdefault(d, []).append(aid)
 
                 processed += 1
 
@@ -414,5 +617,6 @@ def sync_gmail_crm(config: dict) -> dict:
     # Sort by last_activity descending
     crm["applications"].sort(key=lambda a: a.get("last_activity", ""), reverse=True)
     save_crm(crm)
-    logger.info(f"CRM sync complete — {processed} new threads, {len(crm['applications'])} total applications")
+    review_note = f", {needs_review_count} need review ⚠" if needs_review_count else ""
+    logger.info(f"CRM sync complete — {processed} new threads, {len(crm['applications'])} total applications{review_note}")
     return crm

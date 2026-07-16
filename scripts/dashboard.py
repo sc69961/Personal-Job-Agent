@@ -24,11 +24,12 @@ def _build_crm_tab(crm: dict) -> str:
         except Exception:
             pass
 
-    total      = len(apps)
-    interviews = sum(1 for a in apps if a.get("status") == "interview_requested")
-    offers     = sum(1 for a in apps if a.get("status") == "offer")
-    rejected   = sum(1 for a in apps if a.get("status") == "rejected")
-    active     = total - rejected
+    total        = len(apps)
+    interviews   = sum(1 for a in apps if a.get("status") == "interview_requested")
+    offers       = sum(1 for a in apps if a.get("status") == "offer")
+    rejected     = sum(1 for a in apps if a.get("status") == "rejected")
+    active       = total - rejected
+    needs_review = [a for a in apps if a.get("needs_review")]
 
     status_styles = {
         "applied":              ("🔵", "#60a5fa", "#1e3a5f", "#1e40af"),
@@ -53,7 +54,21 @@ def _build_crm_tab(crm: dict) -> str:
         action    = app.get("recommended_action", "")
         notes     = app.get("notes", "")
 
-        link_html = f'<a href="{url}" target="_blank" class="crm-link">View →</a>' if url else "—"
+        link_html    = f'<a href="{url}" target="_blank" class="crm-link">View →</a>' if url else "—"
+        flag_review  = app.get("needs_review", False)
+        reasoning    = app.get("match_reasoning", "")
+        confidence   = app.get("confidence", "")
+        review_badge = ""
+        row_style    = ""
+        if flag_review:
+            conf_txt = f" ({confidence}% confidence)" if confidence else ""
+            review_badge = (
+                f'<span title="{reasoning}{conf_txt}" style="display:inline-block;'
+                'margin-left:6px;font-size:0.68rem;font-weight:700;padding:2px 7px;'
+                'border-radius:5px;background:#2d1a00;color:#fb923c;'
+                'border:1px solid #92400e;cursor:help;white-space:nowrap;">⚠ Review</span>'
+            )
+            row_style = 'style="background:rgba(251,146,60,0.04);border-left:3px solid #92400e;"'
 
         # Highlight follow-up dates that are today or past
         followup_html = followup
@@ -67,8 +82,8 @@ def _build_crm_tab(crm: dict) -> str:
                 pass
 
         rows += f"""
-        <tr data-status="{status}">
-          <td><strong>{company}</strong></td>
+        <tr data-status="{status}" data-review="{'true' if flag_review else 'false'}" {row_style}>
+          <td><strong>{company}</strong>{review_badge}</td>
           <td>{title}</td>
           <td>{link_html}</td>
           <td>{applied}</td>
@@ -85,13 +100,41 @@ def _build_crm_tab(crm: dict) -> str:
     if not rows:
         rows = '<tr><td colspan="8" style="text-align:center;color:#475569;padding:40px;">No applications found yet. Run a full sync to pull from Gmail.</td></tr>'
 
+    # Build "Needs Review" banner HTML
+    review_banner = ""
+    if needs_review:
+        def _review_item(a):
+            reasoning = (": " + a["match_reasoning"]) if a.get("match_reasoning") else ""
+            title = a.get("job_title", "?") or "<em>title unknown</em>"
+            return (f'<li style="margin-bottom:4px;">'
+                    f'<strong>{a.get("company","?")}</strong> — {title}{reasoning}'
+                    f'</li>')
+        review_items_html = "".join(_review_item(a) for a in needs_review)
+        review_banner = f"""
+    <div style="background:#1c1200;border:1px solid #92400e;border-radius:10px;
+                padding:16px 20px;margin-bottom:20px;">
+      <div style="font-weight:700;color:#fb923c;font-size:0.95rem;margin-bottom:8px;">
+        ⚠ {len(needs_review)} application{'s' if len(needs_review)>1 else ''} need{'s' if len(needs_review)==1 else ''} your review
+      </div>
+      <div style="font-size:0.82rem;color:#94a3b8;margin-bottom:10px;">
+        The CRM matched these email threads but had low confidence in the company, job title,
+        or which of your open applications they belong to. Hover the orange ⚠ Review badge
+        on each row for details, then verify or correct in Gmail if needed.
+      </div>
+      <ul style="margin:0;padding-left:18px;color:#e2e8f0;font-size:0.85rem;line-height:1.7;">
+        {review_items_html}
+      </ul>
+    </div>"""
+
     return f"""
+    {review_banner}
     <div class="crm-stats">
       <div class="stat-card"><span class="stat-num">{total}</span><span class="stat-label">Total Applied</span></div>
       <div class="stat-card"><span class="stat-num" style="color:#4ade80">{active}</span><span class="stat-label">Active</span></div>
       <div class="stat-card"><span class="stat-num" style="color:#60a5fa">{interviews}</span><span class="stat-label">Interviews</span></div>
       <div class="stat-card"><span class="stat-num" style="color:#fbbf24">{offers}</span><span class="stat-label">Offers</span></div>
       <div class="stat-card"><span class="stat-num" style="color:#f87171">{rejected}</span><span class="stat-label">Rejected</span></div>
+      {'<div class="stat-card"><span class="stat-num" style="color:#fb923c">' + str(len(needs_review)) + '</span><span class="stat-label">Need Review</span></div>' if needs_review else ''}
     </div>
 
     <div class="crm-filters">
@@ -105,6 +148,12 @@ def _build_crm_tab(crm: dict) -> str:
         <option value="rejected">Rejected</option>
         <option value="withdrawn">Withdrawn</option>
       </select>
+      <button onclick="toggleReviewFilter()" id="reviewFilterBtn"
+              style="margin-left:8px;padding:5px 12px;border-radius:6px;font-size:0.82rem;
+                     cursor:pointer;border:1px solid #92400e;background:#1c1200;
+                     color:#fb923c;font-weight:600;">
+        ⚠ Needs Review ({len(needs_review)})
+      </button>
       <span class="crm-sync-time">Last Gmail sync: {last_synced or "never"}</span>
     </div>
 
@@ -1210,10 +1259,19 @@ def generate_dashboard(
     applySort();
   }}
 
+  let _crmReviewOnly = false;
+  function toggleReviewFilter() {{
+    _crmReviewOnly = !_crmReviewOnly;
+    const btn = document.getElementById('reviewFilterBtn');
+    if (btn) btn.style.background = _crmReviewOnly ? '#92400e' : '#1c1200';
+    filterCRM();
+  }}
   function filterCRM() {{
     const status = document.getElementById('crmStatusFilter').value;
     document.querySelectorAll('#crmBody tr').forEach(row => {{
-      row.style.display = (!status || row.dataset.status === status) ? '' : 'none';
+      const statusOk = !status || row.dataset.status === status;
+      const reviewOk = !_crmReviewOnly || row.dataset.review === 'true';
+      row.style.display = (statusOk && reviewOk) ? '' : 'none';
     }});
   }}
 </script>
