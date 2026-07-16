@@ -271,6 +271,56 @@ class TestPerformanceTab:
         html = _build_performance_tab(str(rejected_file))
         assert "SuperGrid Inc" in html
 
+    def test_scoring_error_badge_present(self, tmp_path):
+        """scoring_error type shows a red API Error badge."""
+        rejected = [self.make_rejected("j1", "scoring_error")]
+        rejected_file = tmp_path / "rejected_jobs.json"
+        rejected_file.write_text(json.dumps(rejected))
+
+        html = _build_performance_tab(str(rejected_file))
+        assert "API Error" in html
+
+    def test_scoring_error_stat_card_present(self, tmp_path):
+        """A dedicated API errors stat card appears when scoring errors exist."""
+        rejected = [self.make_rejected("j1", "scoring_error")]
+        rejected_file = tmp_path / "rejected_jobs.json"
+        rejected_file.write_text(json.dumps(rejected))
+
+        html = _build_performance_tab(str(rejected_file))
+        assert "API errors" in html
+
+    def test_scoring_error_filter_button_present(self, tmp_path):
+        """The ⚠ API Errors filter button is always rendered in the filter bar."""
+        rejected = [self.make_rejected("j1", "pre_filter")]
+        rejected_file = tmp_path / "rejected_jobs.json"
+        rejected_file.write_text(json.dumps(rejected))
+
+        html = _build_performance_tab(str(rejected_file))
+        assert "perfErr" in html
+        assert "scoring_error" in html
+
+    def test_scoring_error_count_in_filter_button(self, tmp_path):
+        """Filter button shows correct count for scoring errors."""
+        rejected = [
+            self.make_rejected("j1", "scoring_error"),
+            self.make_rejected("j2", "scoring_error"),
+            self.make_rejected("j3", "pre_filter"),
+        ]
+        rejected_file = tmp_path / "rejected_jobs.json"
+        rejected_file.write_text(json.dumps(rejected))
+
+        html = _build_performance_tab(str(rejected_file))
+        assert "API Errors (2)" in html
+
+    def test_scoring_error_score_shows_dash(self, tmp_path):
+        """Scoring errors have no score — the score column should show '—'."""
+        rejected = [self.make_rejected("j1", "scoring_error")]
+        rejected_file = tmp_path / "rejected_jobs.json"
+        rejected_file.write_text(json.dumps(rejected))
+
+        html = _build_performance_tab(str(rejected_file))
+        assert "—" in html
+
 
 # ---------------------------------------------------------------------------
 # generate_dashboard — smoke test with all sections

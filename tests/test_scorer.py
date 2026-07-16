@@ -497,6 +497,140 @@ class TestScoreJob:
         result = score_job(job, config, client)
         assert result["score"] == 0
 
+    def test_scoring_error_flag_set_on_bad_json(self, config):
+        """Malformed JSON response → scoring_error=True so it's not confused with a real 0."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="sorry, cannot score")]
+        client = MagicMock()
+        client.messages.create.return_value = mock_response
+
+        result = score_job(make_job(), config, client)
+        assert result.get("scoring_error") is True
+
+    def test_scoring_error_flag_set_on_api_exception(self, config):
+        """API exception → scoring_error=True."""
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("connection reset")
+
+        result = score_job(make_job(), config, client)
+        assert result.get("scoring_error") is True
+
+    def test_scoring_error_detail_contains_error_message(self, config):
+        """scoring_error_detail should capture the actual error string for the performance log."""
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("API timeout after 30s")
+
+        result = score_job(make_job(), config, client)
+        assert "API timeout after 30s" in result.get("scoring_error_detail", "")
+
+    def test_no_scoring_error_flag_on_success(self, config):
+        """A successful score must NOT have scoring_error set."""
+        claude_response = {
+            "score": 75, "confidence": 80, "title_match": "strong",
+            "location_ok": True, "salary_ok": True,
+            "company_tier": "climatetech", "is_target_company": True,
+            "seniority_ok": True, "top_strengths": [], "top_gaps": [],
+            "top_reasons": [], "match_summary": "Good fit.",
+            "apply_recommendation": "yes", "work_type": "remote",
+            "salary_estimate": "$170K", "short_description": "PM role.",
+        }
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=json.dumps(claude_response))]
+        client = MagicMock()
+        client.messages.create.return_value = mock_response
+
+        result = score_job(make_job(), config, client)
+        assert not result.get("scoring_error")
+
+
+# ---------------------------------------------------------------------------
+# score_all_jobs — scoring_error routing
+# ---------------------------------------------------------------------------
+
+class TestScoringErrorRouting:
+
+    def test_scoring_error_job_excluded_from_results(self, config, tmp_path):
+        """A job that errors should not appear in score_all_jobs results."""
+        cache_file    = tmp_path / "scored.json"
+        rejected_file = tmp_path / "rejected_jobs.json"
+
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("timeout")
+
+        with patch("scripts.scorer.Anthropic", return_value=client):
+            with patch("scripts.scorer._load_first_seen_registry", return_value={}):
+                with patch("scripts.scorer._save_first_seen_registry"):
+                    results = score_all_jobs(
+                        [make_job(id="j1")], config, min_score=40,
+                        cache_path=str(cache_file),
+                        rejected_path=str(rejected_file),
+                    )
+
+        assert len(results) == 0
+
+    def test_scoring_error_written_to_rejected_file(self, config, tmp_path):
+        """A scoring error should appear in rejected_jobs.json with type='scoring_error'."""
+        cache_file    = tmp_path / "scored.json"
+        rejected_file = tmp_path / "rejected_jobs.json"
+
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("rate limit")
+
+        with patch("scripts.scorer.Anthropic", return_value=client):
+            with patch("scripts.scorer._load_first_seen_registry", return_value={}):
+                with patch("scripts.scorer._save_first_seen_registry"):
+                    score_all_jobs(
+                        [make_job(id="j1")], config, min_score=40,
+                        cache_path=str(cache_file),
+                        rejected_path=str(rejected_file),
+                    )
+
+        rejected = json.loads(rejected_file.read_text())
+        assert len(rejected) == 1
+        entry = rejected[0]
+        assert entry["rejection_type"] == "scoring_error"
+        assert "rate limit" in entry["rejection_reason"]
+
+    def test_scoring_error_not_in_low_score_bucket(self, config, tmp_path):
+        """Scoring errors must not be double-counted as low_score entries."""
+        cache_file    = tmp_path / "scored.json"
+        rejected_file = tmp_path / "rejected_jobs.json"
+
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("timeout")
+
+        with patch("scripts.scorer.Anthropic", return_value=client):
+            with patch("scripts.scorer._load_first_seen_registry", return_value={}):
+                with patch("scripts.scorer._save_first_seen_registry"):
+                    score_all_jobs(
+                        [make_job(id="j1")], config, min_score=40,
+                        cache_path=str(cache_file),
+                        rejected_path=str(rejected_file),
+                    )
+
+        rejected = json.loads(rejected_file.read_text())
+        assert all(r["rejection_type"] != "low_score" for r in rejected)
+
+    def test_scoring_error_score_is_none_in_rejected_log(self, config, tmp_path):
+        """Scoring errors have no meaningful score — it should be stored as None."""
+        cache_file    = tmp_path / "scored.json"
+        rejected_file = tmp_path / "rejected_jobs.json"
+
+        client = MagicMock()
+        client.messages.create.side_effect = Exception("503")
+
+        with patch("scripts.scorer.Anthropic", return_value=client):
+            with patch("scripts.scorer._load_first_seen_registry", return_value={}):
+                with patch("scripts.scorer._save_first_seen_registry"):
+                    score_all_jobs(
+                        [make_job(id="j1")], config, min_score=40,
+                        cache_path=str(cache_file),
+                        rejected_path=str(rejected_file),
+                    )
+
+        rejected = json.loads(rejected_file.read_text())
+        assert rejected[0]["score"] is None
+
 
 # ---------------------------------------------------------------------------
 # score_all_jobs — caching and deduplication

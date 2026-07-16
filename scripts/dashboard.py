@@ -806,10 +806,11 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
     # Sort newest first by first_analyzed
     rejected_sorted = sorted(rejected, key=lambda r: r.get("first_analyzed", ""), reverse=True)
 
-    total            = len(rejected)
-    pre_filter_count = sum(1 for r in rejected if r.get("rejection_type") == "pre_filter")
-    low_score_count  = sum(1 for r in rejected if r.get("rejection_type") == "low_score")
-    unique_companies = len({r.get("company", "") for r in rejected if r.get("company")})
+    total               = len(rejected)
+    pre_filter_count    = sum(1 for r in rejected if r.get("rejection_type") == "pre_filter")
+    low_score_count     = sum(1 for r in rejected if r.get("rejection_type") == "low_score")
+    scoring_error_count = sum(1 for r in rejected if r.get("rejection_type") == "scoring_error")
+    unique_companies    = len({r.get("company", "") for r in rejected if r.get("company")})
 
     # ── Build table rows ──
     rows_html = ""
@@ -832,6 +833,12 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
                 '<span style="display:inline-block;font-size:0.68rem;font-weight:700;'
                 'padding:2px 8px;border-radius:5px;background:#1e1b4b;color:#818cf8;'
                 'border:1px solid #3730a3;white-space:nowrap;">Pre-filter</span>'
+            )
+        elif rtype == "scoring_error":
+            type_badge = (
+                '<span style="display:inline-block;font-size:0.68rem;font-weight:700;'
+                'padding:2px 8px;border-radius:5px;background:#2d0f0f;color:#f87171;'
+                'border:1px solid #991b1b;white-space:nowrap;">⚠ API Error</span>'
             )
         else:
             type_badge = (
@@ -886,6 +893,10 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
       <span class="stat-label">Low score</span>
     </div>
     <div class="stat-card">
+      <span class="stat-num" style="color:#f87171;">{scoring_error_count}</span>
+      <span class="stat-label">API errors</span>
+    </div>
+    <div class="stat-card">
       <span class="stat-num" style="color:#4ade80;">{unique_companies}</span>
       <span class="stat-label">Companies seen</span>
     </div>
@@ -894,9 +905,10 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
   <!-- Filter bar -->
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
     <div style="display:flex;gap:6px;">
-      <button onclick="filterPerf('')"           id="perfAll" class="perf-filter-btn active">All ({total})</button>
-      <button onclick="filterPerf('pre_filter')" id="perfPre" class="perf-filter-btn">Pre-filter ({pre_filter_count})</button>
-      <button onclick="filterPerf('low_score')"  id="perfLow" class="perf-filter-btn">Low Score ({low_score_count})</button>
+      <button onclick="filterPerf('')"               id="perfAll" class="perf-filter-btn active">All ({total})</button>
+      <button onclick="filterPerf('pre_filter')"     id="perfPre" class="perf-filter-btn">Pre-filter ({pre_filter_count})</button>
+      <button onclick="filterPerf('low_score')"      id="perfLow" class="perf-filter-btn">Low Score ({low_score_count})</button>
+      <button onclick="filterPerf('scoring_error')"  id="perfErr" class="perf-filter-btn">⚠ API Errors ({scoring_error_count})</button>
     </div>
     <input type="text" id="perfSearch" placeholder="Search company, title, reason…"
            oninput="filterPerf(currentPerfFilter())"
@@ -935,11 +947,11 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
   window.currentPerfFilter = function() {{ return _activeType; }};
   window.filterPerf = function(type) {{
     _activeType = type;
-    ['perfAll','perfPre','perfLow'].forEach(function(id) {{
+    ['perfAll','perfPre','perfLow','perfErr'].forEach(function(id) {{
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
     }});
-    const btnMap = {{'': 'perfAll', 'pre_filter': 'perfPre', 'low_score': 'perfLow'}};
+    const btnMap = {{'': 'perfAll', 'pre_filter': 'perfPre', 'low_score': 'perfLow', 'scoring_error': 'perfErr'}};
     const active = document.getElementById(btnMap[type]);
     if (active) active.classList.add('active');
     const search = (document.getElementById('perfSearch')?.value || '').toLowerCase();

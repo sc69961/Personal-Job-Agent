@@ -269,6 +269,7 @@ def score_job(job: dict, config: dict, client: Anthropic, positive_outcome_compa
 
     prompt = build_scoring_prompt(job, config["RESUME_TEXT"], criteria, positive_outcome_companies)
 
+    last_error = "unknown error"
     for attempt in range(2):
         try:
             response = client.messages.create(
@@ -307,12 +308,16 @@ def score_job(job: dict, config: dict, client: Anthropic, positive_outcome_compa
             return job
 
         except (json.JSONDecodeError, Exception) as e:
+            last_error = str(e)
             logger.warning(f"Score attempt {attempt+1} failed for '{job['title']}' at {job['company']}: {e}")
             if attempt == 0:
                 time.sleep(2)
 
-    # Fallback if both attempts fail
+    # Fallback if both attempts fail — tag as scoring_error so the Performance
+    # tab can distinguish API/parse failures from genuinely low-scoring jobs.
     job["score"] = 0
+    job["scoring_error"] = True
+    job["scoring_error_detail"] = last_error
     job["match_summary"] = "Scoring failed — review manually."
     job["apply_recommendation"] = "maybe"
     return job
@@ -429,10 +434,17 @@ def score_all_jobs(
 
     print(f"\n  {new_count} new scored, {cached_count} from cache, {filtered_count} pre-filtered (no tokens used)")
 
-    # Filter and sort
-    qualifying       = [j for j in scored if (j["score"] or 0) >= min_score]
-    low_score_failed = [j for j in scored if (j["score"] or 0) < min_score]
+    # Filter and sort — three buckets:
+    #   scoring_error : Claude API/parse failure (score=0 is meaningless, not a real signal)
+    #   qualifying    : score >= min_score and no API error
+    #   low_score     : scored successfully but below threshold
+    scoring_error_jobs = [j for j in scored if j.get("scoring_error")]
+    qualifying         = [j for j in scored if not j.get("scoring_error") and (j["score"] or 0) >= min_score]
+    low_score_failed   = [j for j in scored if not j.get("scoring_error") and (j["score"] or 0) < min_score]
     qualifying.sort(key=lambda j: j["score"], reverse=True)
+
+    if scoring_error_jobs:
+        logger.warning(f"{len(scoring_error_jobs)} job(s) failed scoring (API/parse error) — tagged as 'scoring_error' in performance log")
 
     # Save first_seen registry so dates survive future cache wipes
     _save_first_seen_registry(first_seen_registry)
@@ -466,6 +478,11 @@ def score_all_jobs(
     for job in low_score_failed:
         reason = f"Score {job.get('score', 0)} below threshold {min_score}"
         _upsert(job, "low_score", reason, job.get("score", 0))
+
+    for job in scoring_error_jobs:
+        detail = job.get("scoring_error_detail", "unknown error")
+        reason = f"Claude API/parse error after 2 attempts: {detail}"
+        _upsert(job, "scoring_error", reason, None)
 
     try:
         os.makedirs(os.path.dirname(os.path.abspath(rejected_path)), exist_ok=True)
