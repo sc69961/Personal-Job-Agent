@@ -410,9 +410,17 @@ def sync_gmail_crm(config: dict) -> dict:
     # Pass 0: Re-scan existing active application threads for status updates.
     # This catches rejections/offers that arrive as replies to already-seen
     # threads (e.g. interview thread → recruiter sends rejection in same chain).
+    #
+    # Cost control: only rescan threads with last_activity in the past 14 days.
+    # Applications silent for 14+ days are unlikely to have new activity, and
+    # the auto-ghost pass will mark them ghosted at 30 days anyway.
     # -----------------------------------------------------------------------
     RESCAN_STATUSES = {"applied", "response_received", "interview_requested"}
+    rescan_cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
     for app in crm["applications"]:
+        last_active = app.get("last_activity", "")
+        if last_active and last_active < rescan_cutoff:
+            continue  # silent for 14+ days — skip rescan, save tokens
         if app.get("status") in RESCAN_STATUSES:
             for tid in app.get("thread_ids", []):
                 try:

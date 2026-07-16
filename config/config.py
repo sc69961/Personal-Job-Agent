@@ -12,9 +12,9 @@ YOUR_LINKEDIN = "https://www.linkedin.com/in/steve-christian-mba/"
 DIGEST_EMAIL_TO = "steve.christianmba@gmail.com"
 
 # ---- ANTHROPIC API ----
-# Set this in your shell: export ANTHROPIC_API_KEY=""  # leave blank to use env var
+# Set this in your shell: export ANTHROPIC_API_KEY="sk-ant-..."
 # Or paste it here (not recommended for shared machines)
-ANTHROPIC_API_KEY = ""  # leave blank to use env var
+ANTHROPIC_API_KEY = ""  # leave blank — real value in ANTHROPIC_API_KEY GitHub Secret
 
 # ---- GOOGLE CREDENTIALS ----
 # Path to your Google service account JSON (for Sheets + Gmail)
@@ -22,14 +22,20 @@ ANTHROPIC_API_KEY = ""  # leave blank to use env var
 GOOGLE_CREDENTIALS_PATH = "./config/google_credentials.json"
 GOOGLE_SHEET_ID = "1kUMStZH6EOdqY7iJFJYPbuyQw5stLXcGETdE5u-mWAo"  # Paste your Sheet ID after creating it (see SETUP.md)
 GMAIL_SENDER = "steve.christianmba@gmail.com"
-GMAIL_APP_PASSWORD = ""   # set via GMAIL_APP_PASSWORD GitHub Secret
 
+# ---- GMAIL APP PASSWORD (for sending the digest email) ----
+# Generate at: myaccount.google.com/apppasswords  (requires 2-Step Verification)
+# Select "Other (Custom name)", name it "Job Agent", copy the 16-char password.
+# In GitHub Secrets, store it as GMAIL_APP_PASSWORD.
+GMAIL_APP_PASSWORD = ""  # leave blank — real value in GMAIL_APP_PASSWORD GitHub Secret
 
-# ---- AWS S3 (persistent storage) ----
+# ---- AWS S3 (persistent storage — never expires unlike GitHub Actions cache) ----
+# IAM user: job-agent-s3  |  Policy: job-agent-s3-policy (GetObject, PutObject, ListBucket)
+# Generate keys at: AWS Console → IAM → Users → job-agent-s3 → Security credentials
 S3_BUCKET_NAME     = "stevechristian-job-agent"
 AWS_REGION         = "us-east-2"
-AWS_ACCESS_KEY_ID     = ""   # injected via GitHub Secret AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY = ""   # injected via GitHub Secret AWS_SECRET_ACCESS_KEY
+AWS_ACCESS_KEY_ID     = ""  # leave blank — real value in AWS_ACCESS_KEY_ID GitHub Secret
+AWS_SECRET_ACCESS_KEY = ""  # leave blank — real value in AWS_SECRET_ACCESS_KEY GitHub Secret
 
 # ---- SCORING CRITERIA ----
 SALARY_FLOOR = 130000
@@ -155,6 +161,11 @@ SCORE_WEIGHTS = {
 
 # ---- SCRAPER SETTINGS ----
 MAX_JOBS_PER_SOURCE = 50       # Cap per source per run
+MAX_NEW_SCORES_PER_RUN = 80    # Hard cap on new Claude scoring calls per run.
+                               # Prevents runaway spend if a cache wipe + large scrape
+                               # batch hits on the same day. Deferred jobs are scored
+                               # on the next daily run. Set higher if you want faster
+                               # catch-up after a manual cache clear.
 MIN_SCORE_TO_INCLUDE = 40      # Jobs below this score are dropped (40-54 go to "Maybe" section)
 TOP_N_FOR_EMAIL = 15           # How many jobs go in the daily digest email
 DAYS_TO_KEEP_IN_SHEET = 30     # Jobs older than this get archived

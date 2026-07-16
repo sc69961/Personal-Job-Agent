@@ -95,7 +95,7 @@ jobs:
       - name: Persist data files to repo
         run: |
           bash scripts/git_safe_push.sh \
-            "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json" \
+            "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json output/seen_job_ids.json" \
             "chore: update job agent data [skip ci]"
 
       - name: Install Firebase CLI

@@ -22,6 +22,10 @@ S3_FILES = [
     "output/first_seen_registry.json",
     "output/rejected_jobs.json",
     "output/market_stats.json",
+    # crm.json: persists CRM state across GitHub Actions cache misses
+    "output/crm.json",
+    # seen_job_ids.json: all-time scraped IDs; prevents re-scoring after cache wipes
+    "output/seen_job_ids.json",
 ]
 
 

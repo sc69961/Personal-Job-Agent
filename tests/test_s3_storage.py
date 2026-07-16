@@ -222,14 +222,13 @@ class TestBackup:
 
         assert any("upload failed" in r.message.lower() for r in caplog.records)
 
-    def test_uploads_all_four_managed_files(self, tmp_path):
-        """All four S3_FILES should be uploaded when they all exist."""
+    def test_uploads_all_managed_files(self, tmp_path):
+        """All S3_FILES should be uploaded when they all exist locally."""
         cfg = full_config()
-        # Create all four files locally
+        # Create one temp file per S3_FILES entry
         created = []
-        for name in ["scored_jobs.json", "first_seen_registry.json",
-                     "rejected_jobs.json", "market_stats.json"]:
-            f = tmp_path / name
+        for path in S3_FILES:
+            f = tmp_path / Path(path).name
             f.write_text("{}")
             created.append(str(f))
 
@@ -238,13 +237,14 @@ class TestBackup:
             with patch("scripts.s3_storage.S3_FILES", created):
                 backup(cfg)
 
-        assert mock_s3.upload_file.call_count == 4
+        assert mock_s3.upload_file.call_count == len(S3_FILES)
 
-    def test_s3_files_constant_has_four_entries(self):
-        """Sanity check: the module-level S3_FILES list should have exactly 4 entries."""
-        assert len(S3_FILES) == 4
+    def test_s3_files_constant_has_expected_entries(self):
+        """S3_FILES must include all six persistence files."""
         names = [Path(p).name for p in S3_FILES]
         assert "scored_jobs.json" in names
         assert "first_seen_registry.json" in names
         assert "rejected_jobs.json" in names
         assert "market_stats.json" in names
+        assert "crm.json" in names
+        assert "seen_job_ids.json" in names

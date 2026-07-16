@@ -4,7 +4,103 @@ All notable changes to the job agent are documented here.
 
 ---
 
-## [Unreleased] — Sprint: Git Reliability, Persistence, Scoring, & Test Coverage
+## [Unreleased] — Sprint: CRM Smart Matching & Email Confidence Flagging
+
+### 2026-07-16
+
+#### CRM — Automated Email-to-Application Matching
+
+The most impactful problem with the personal CRM was that recruiter replies
+frequently arrive on *new* email threads with no job title in the subject.
+This sprint replaces the single-layer company-name lookup with a four-layer
+matching stack and adds confidence scoring so low-confidence matches are
+flagged for review instead of silently committed.
+
+**`scripts/gmail_crm.py`**
+
+- **Recruiter email domain matching** (`_extract_sender_domains`, `_build_domain_map`,
+  `_find_existing_by_domain`) — On each new thread, extract company-owned
+  domains from all `From:` headers (filtering out Gmail, Yahoo, and 36 ATS
+  platforms including Greenhouse, Lever, Ashby, Workday, and LinkedIn).
+  Compare against domains stored on existing CRM entries. A domain hit is
+  the most reliable match signal and is tried first.
+
+- **Four-layer matching priority** (most → least reliable):
+  1. Recruiter email domain — catches follow-ups with no role in subject.
+  2. Claude's `matched_company` / `matched_title` suggestion — Claude is
+     now shown Steve's full active-application list and asked to identify
+     which role a vague email belongs to.
+  3. Exact company + title hash — previous behaviour; unchanged.
+  4. Company-name-only fallback — normalized company name match across all
+     open entries.
+
+- **Active applications context in Claude prompt** — The prompt now includes
+  a formatted list of all non-terminal applications (`company | job_title |
+  applied_date | status`) so Claude can identify "Following up on your
+  application" emails even when the body never names the role. `max_tokens`
+  raised 400 → 600 to accommodate the richer prompt.
+
+- **Confidence scoring** — Claude returns an integer `confidence` (0–100)
+  for each classification:
+  - 90–100: role and company explicit in subject/body; status unambiguous
+  - 70–89: company clear but role inferred; or one ambiguous status signal
+  - 50–69: role or company inferred; recruiter reply with no job reference
+  - <50: guessing from timing or partial signals
+  If Claude omits the field the code defaults to 80. Confidence < 70 or
+  an empty `job_title` auto-sets `needs_review = True`.
+
+- **`needs_review` flag** — Stored on CRM entries when confidence is low.
+  Cleared automatically if a subsequent high-confidence match updates the
+  same entry. Logged as `⚠ Low confidence` at INFO level.
+
+- **`match_reasoning`** — 1-sentence Claude explanation of how it identified
+  the application match (or why it's uncertain). Shown in dashboard and
+  email tooltips.
+
+- **`sender_domains` persistence** — Domains discovered on each thread are
+  stored on the CRM entry and accumulated across runs. Future recruiter
+  replies on new threads are found by domain without needing Claude.
+
+**`scripts/dashboard.py`** — CRM tab additions
+
+- Orange **⚠ Review** badge on any CRM row where `needs_review=True`.
+  Hovering reveals `match_reasoning` and the confidence percentage.
+- Amber **Needs Review** banner at the top of the CRM tab listing all
+  flagged entries with company, title, and reasoning.
+- **"Need Review (N)"** orange stat card in the CRM header.
+- **"⚠ Needs Review (N)"** toggle filter button — click to show only
+  flagged entries; click again to clear.
+- Extracted `_review_item(a)` helper to avoid Python 3.10 backslash-in-
+  f-string limitation.
+
+**`scripts/gmail_sender.py`** — Daily digest additions
+
+- Amber **"N CRM matches need your review"** block in the Pipeline
+  Snapshot section of the daily email. Lists up to 5 flagged entries
+  with company, title, and Claude's `match_reasoning`. Directs Steve to
+  the CRM tab to verify.
+
+#### Testing — 34 new tests (all passing, 79 total in test_crm.py)
+
+- **`TestExtractSenderDomains`** (12 tests) — angle-bracket format,
+  bare email, gmail excluded, greenhouse/lever/ashby excluded, empty
+  messages, multiple domains, deduplication, malformed header, generic
+  domain set membership.
+- **`TestBuildDomainMap`** (5 tests) — no sender_domains, single domain,
+  multiple domains from one app, multiple apps, empty dict.
+- **`TestFindExistingByDomain`** (6 tests) — empty sender set, empty
+  domain map, no intersection, match found, highest-priority-status
+  preference, partial domain overlap.
+- **`TestAnalyzeThreadConfidence`** (11 tests) — high confidence
+  passthrough, low confidence forces needs_review, empty title forces
+  needs_review, null response, null with whitespace, markdown fence
+  stripping, matched_company/title fields, API exception returns None,
+  active_applications in prompt, no context when None, boundary at
+  exactly 70 (no review), 69 triggers review.
+
+---
+
+## [2026-07-15] — Sprint: Git Reliability, Persistence, Scoring, & Test Coverage
 
 ### 2026-07-15
 

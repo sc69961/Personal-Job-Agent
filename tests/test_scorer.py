@@ -553,6 +553,7 @@ class TestScoringErrorRouting:
         """A job that errors should not appear in score_all_jobs results."""
         cache_file    = tmp_path / "scored.json"
         rejected_file = tmp_path / "rejected_jobs.json"
+        seen_file     = tmp_path / "seen_ids.json"
 
         client = MagicMock()
         client.messages.create.side_effect = Exception("timeout")
@@ -564,6 +565,7 @@ class TestScoringErrorRouting:
                         [make_job(id="j1")], config, min_score=40,
                         cache_path=str(cache_file),
                         rejected_path=str(rejected_file),
+                        seen_ids_path=str(seen_file),
                     )
 
         assert len(results) == 0
@@ -572,6 +574,7 @@ class TestScoringErrorRouting:
         """A scoring error should appear in rejected_jobs.json with type='scoring_error'."""
         cache_file    = tmp_path / "scored.json"
         rejected_file = tmp_path / "rejected_jobs.json"
+        seen_file     = tmp_path / "seen_ids.json"
 
         client = MagicMock()
         client.messages.create.side_effect = Exception("rate limit")
@@ -583,6 +586,7 @@ class TestScoringErrorRouting:
                         [make_job(id="j1")], config, min_score=40,
                         cache_path=str(cache_file),
                         rejected_path=str(rejected_file),
+                        seen_ids_path=str(seen_file),
                     )
 
         rejected = json.loads(rejected_file.read_text())
@@ -595,6 +599,7 @@ class TestScoringErrorRouting:
         """Scoring errors must not be double-counted as low_score entries."""
         cache_file    = tmp_path / "scored.json"
         rejected_file = tmp_path / "rejected_jobs.json"
+        seen_file     = tmp_path / "seen_ids.json"
 
         client = MagicMock()
         client.messages.create.side_effect = Exception("timeout")
@@ -606,6 +611,7 @@ class TestScoringErrorRouting:
                         [make_job(id="j1")], config, min_score=40,
                         cache_path=str(cache_file),
                         rejected_path=str(rejected_file),
+                        seen_ids_path=str(seen_file),
                     )
 
         rejected = json.loads(rejected_file.read_text())
@@ -615,6 +621,7 @@ class TestScoringErrorRouting:
         """Scoring errors have no meaningful score — it should be stored as None."""
         cache_file    = tmp_path / "scored.json"
         rejected_file = tmp_path / "rejected_jobs.json"
+        seen_file     = tmp_path / "seen_ids.json"
 
         client = MagicMock()
         client.messages.create.side_effect = Exception("503")
@@ -626,6 +633,7 @@ class TestScoringErrorRouting:
                         [make_job(id="j1")], config, min_score=40,
                         cache_path=str(cache_file),
                         rejected_path=str(rejected_file),
+                        seen_ids_path=str(seen_file),
                     )
 
         rejected = json.loads(rejected_file.read_text())
@@ -697,10 +705,12 @@ class TestScoreAllJobs:
         cache_file = tmp_path / "scored.json"
         cache_file.write_text(json.dumps(cached_jobs))
 
-        jobs = [make_job(id=j["id"]) for j in cached_jobs]
+        # Match title+company to cached entries so dedup doesn't collapse them
+        jobs = [make_job(id=j["id"], title=j["title"], company=j["company"]) for j in cached_jobs]
         with patch("scripts.scorer.Anthropic", return_value=MagicMock()):
             results = score_all_jobs(
-                jobs, config, min_score=55, cache_path=str(cache_file)
+                jobs, config, min_score=55, cache_path=str(cache_file),
+                seen_ids_path=str(tmp_path / "seen_ids.json"),
             )
 
         scores = [r["score"] for r in results]

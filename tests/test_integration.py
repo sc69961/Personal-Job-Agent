@@ -140,7 +140,8 @@ class TestScorerIntegration:
             good_response,            # job_2 succeeds
         ]
 
-        jobs = [make_job(id="job_1"), make_job(id="job_2")]
+        # Different titles so title+company dedup doesn't collapse them to one
+        jobs = [make_job(id="job_1", title="PM Role A"), make_job(id="job_2", title="PM Role B")]
         cache_file = tmp_path / "scored.json"
 
         with patch("scripts.scorer.Anthropic", return_value=mock_client):
@@ -241,12 +242,9 @@ class TestDashboardRendering:
         generate_dashboard(jobs, crm={}, output_path=output_path)
         html = open(output_path).read()
 
-        # The NEW badge should not appear for old jobs
-        # Check that the specific NEW badge style isn't tied to this job
-        # (the word NEW might appear elsewhere, so check for badge style context)
-        import re
-        new_badges = re.findall(r'background:#1e2a0f.*?NEW', html, re.DOTALL)
-        assert len(new_badges) == 0
+        # The NEW badge on job cards uses letter-spacing:0.05em — unique to job card badges.
+        # (The market intel tab and CSS also use #1e2a0f but without letter-spacing.)
+        assert 'letter-spacing:0.05em;">NEW' not in html
 
     def test_applied_badge_appears_for_crm_company(self, tmp_path):
         """CRM badge shows only on the job whose company + title match the CRM entry."""

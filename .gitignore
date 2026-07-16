@@ -9,6 +9,7 @@ output/
 !output/first_seen_registry.json
 !output/rejected_jobs.json
 !output/market_stats.json
+!output/seen_job_ids.json
 
 # ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
