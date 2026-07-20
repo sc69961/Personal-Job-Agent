@@ -10,6 +10,11 @@ on:
         required: false
         default: 'false'
         type: boolean
+      rescue_errors:
+        description: 'Re-queue API-error jobs for re-scoring (clears them from seen_ids before the run)'
+        required: false
+        default: 'false'
+        type: boolean
 
 # CONCURRENCY GUARD
 # Only one job-agent run executes at a time. If a scheduled run and a manual
@@ -64,6 +69,17 @@ jobs:
       - name: Decode Google OAuth token (cache miss fallback)
         if: steps.restore-state.outputs.cache-hit != 'true'
         run: echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
+
+      # Optional: re-queue jobs that previously failed due to API errors.
+      # Removes their IDs from seen_ids.json in S3 so this run re-scores them.
+      - name: Rescue API-error jobs (if requested)
+        if: ${{ github.event.inputs.rescue_errors == 'true' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET_NAME: stevechristian-job-agent
+          AWS_REGION: us-east-2
+        run: python scripts/rescue_scoring_errors.py
 
       - name: Run Job Agent
         env:

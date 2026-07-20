@@ -613,7 +613,11 @@ def score_all_jobs(
                     first_seen_registry[jid] = fs
             print(f"→ {job['score']}")
             scored.append(job)
-            seen_ids.add(jid)
+            if not job.get("scoring_error"):
+                # Only mark as permanently seen when scoring succeeded.
+                # API errors are transient — leave the ID out of seen_ids so the
+                # job is automatically retried on the next run.
+                seen_ids.add(jid)
             new_count += 1
             time.sleep(delay_between)
 
