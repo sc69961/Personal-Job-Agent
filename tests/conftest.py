@@ -10,19 +10,23 @@ from unittest.mock import patch
 
 
 @pytest.fixture(autouse=True)
-def isolate_seen_ids():
+def isolate_scorer_registries():
     """
-    Isolate the seen_job_ids registry for every test.
+    Isolate scorer registries (seen_job_ids + first_seen) for every test.
 
-    Without this, score_all_jobs() reads/writes ./output/seen_job_ids.json.
-    Job IDs accumulate across test runs, causing tests that expect a fresh
-    scoring pass to see "(seen) … skipping re-score" instead.
+    Without this, score_all_jobs() reads/writes two files under ./output/:
+      - seen_job_ids.json: job IDs accumulate across test runs, causing
+        subsequent tests to see "(seen) … skipping re-score"
+      - first_seen_registry.json: job IDs get a first_seen timestamp on
+        first run; later runs return the cached date instead of today, breaking
+        assertions like `assert result["first_seen"].startswith(today)`
 
-    We patch the functions (not the path constant) because Python captures
-    default argument values at function-definition time, so patching the
-    module-level _SEEN_IDS_PATH string has no effect on already-defined
-    function signatures.
+    We patch the functions (not the path constants) because Python captures
+    default argument values at function-definition time, so patching a
+    module-level path string has no effect on already-defined function signatures.
     """
     with patch("scripts.scorer._load_seen_ids", return_value=set()), \
-         patch("scripts.scorer._save_seen_ids"):
+         patch("scripts.scorer._save_seen_ids"), \
+         patch("scripts.scorer._load_first_seen_registry", return_value={}), \
+         patch("scripts.scorer._save_first_seen_registry"):
         yield

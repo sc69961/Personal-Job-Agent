@@ -9,7 +9,7 @@ CLIMATETECH_COMPANIES = [
     "OhmConnect", "Leap Energy", "Enel X", "CPower", "Itron",
     "Landis+Gyr", "Siemens Energy", "ABB", "GE Vernova", "Schneider Electric",
     "Oracle Utilities", "Tantalus", "Doosan GridTech", "Spirae",
-    "Weavegrid", "DERAPI", "Camus Energy", "GridBeyond", "Dynamic Grid",
+    "Weavegrid", "DERAPI", "Camus Energy", "GridBeyond",
     "Kaluza", "Kraken", "Next Kraftwerke", "Evergen", "Enersponse",
     "Blueprint Power", "David Energy", "Equilibrium Energy", "Habitat Energy",
     "Modo Energy", "GridStatus.io", "Yes Energy", "Ascend Analytics",
@@ -112,7 +112,7 @@ COMPANY_CAREER_URLS = {
     "LineVision":           "https://jobs.ashbyhq.com/linevision",                  # fixed: was HTML
     "Sunrun":               "https://careers.sunrun.com/search-jobs/product%20manager/Colorado%2C%20US/21632/1/3/6252001-5417618/39x00027/-105x50083/50/2",
     "Syso":                 "https://www.sysotechnologies.com/join/",
-    "Arcadia":              "https://jobs.lever.co/arcadia",                         # fixed: was HTML
+    "Arcadia":              "https://job-boards.greenhouse.io/arcadiacareers",        # FIX: was jobs.lever.co/arcadia (arcadia.io = healthcare data, WRONG company); arcadiacareers = arcadia.com (clean energy / community solar)
     "UtilityAPI":           "https://job-boards.greenhouse.io/utilityapi",
     "Utilidata":            "https://jobs.ashbyhq.com/utilidata",                   # fixed: was HTML
     "Yes Energy":           "https://job-boards.greenhouse.io/yesenergy",
@@ -120,7 +120,7 @@ COMPANY_CAREER_URLS = {
     "Camus Energy":         "https://jobs.ashbyhq.com/camus-energy",                # fixed: was HTML
     "Rhythm Energy":        "https://ats.rippling.com/rhythm-energy/jobs",
     "Bidgely":              "https://jobs.ashbyhq.com/bidgely",                     # fixed: was HTML
-    "Dynamic Grid":         "https://www.griddynamics.com/careers/discover-openings",
+    # "Dynamic Grid" removed — no such energy company found; URL was pointing to Grid Dynamics (tech consulting), which is a different company entirely
     "Modo Energy":          "https://job-boards.eu.greenhouse.io/modoenergy",
     "SB Energy":            "https://jobs.ashbyhq.com/sb-energy",                   # fixed: was HTML
     "GridBeyond":           "https://gridbeyond.com/about-us/careers-2/",
@@ -152,6 +152,8 @@ COMPANY_CAREER_URLS = {
     "Anza Renewables":      "https://ats.rippling.com/anza-re-llc/jobs",
     "Kevala":               "https://jobs.ashbyhq.com/kevala",                      # fixed: was HTML
     "EVgo":                 "https://jobs.ashbyhq.com/evgo",                        # fixed: was HTML
+    "ChargePoint":          "https://job-boards.greenhouse.io/chargepoint",
+    "Form Energy":          "https://jobs.ashbyhq.com/formenergy",
 
     # --- Recommended additions based on profile ---
     "SPAN":                 "https://jobs.ashbyhq.com/span",                        # fixed: was HTML
