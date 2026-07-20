@@ -712,7 +712,11 @@ def scrape_company_sites(max_jobs: int = 200) -> list:
 # ---------------------------------------------------------------------------
 
 CLIMATE_JOB_BOARDS = [
-    ("ClimateTechList",  "https://www.climatetechlist.com/jobs"),
+    # ClimateTechList removed: site is a JavaScript-rendered Airtable embed.
+    # Our HTML scraper only sees the page shell and picks up navigation links
+    # (e.g., "Product Manager jobs") instead of real listings. Zero useful signal.
+    # Workaround: sign up for their email alerts at climatetechlist.com/jobs/alerts
+    # filtered by "Product Manager" + "Remote" to get job notifications directly.
     ("ClimatePeople",    "https://www.climatepeople.com/jobs"),
     ("ClimateDraft",     "https://jobs.climatedraft.org/jobs"),
     ("Terra.do",         "https://www.terra.do/climate-jobs/job-board/"),

@@ -86,14 +86,14 @@ def _build_crm_tab(crm: dict) -> str:
           <td><strong>{company}</strong>{review_badge}</td>
           <td>{title}</td>
           <td>{link_html}</td>
-          <td>{applied}</td>
-          <td>
+          <td data-sort-val="{applied}">{applied}</td>
+          <td data-sort-val="{status}">
             <span class="status-pill" style="color:{color};background:{bg};border:1px solid {border};">
               {emoji} {label}
             </span>
           </td>
-          <td>{last_act}</td>
-          <td>{followup_html}</td>
+          <td data-sort-val="{last_act}">{last_act}</td>
+          <td data-sort-val="{followup}">{followup_html}</td>
           <td class="action-cell">{action}</td>
         </tr>"""
 
@@ -686,13 +686,13 @@ def _build_market_tab(
         funding = profile.get("funding", "—")
         what    = profile.get("what_they_do", "")
         company_rows += f"""
-        <tr>
+        <tr data-search="{name.lower()}">
           <td>
             <span style="font-weight:600;color:#f1f5f9;">{tier_badge} {name}</span>
             {f'<div style="font-size:0.72rem;color:#475569;margin-top:2px;">{what[:80]}{"…" if len(what)>80 else ""}</div>' if what else ''}
           </td>
-          <td style="text-align:center;color:#818cf8;font-weight:700;">{c['pm_roles']}</td>
-          <td style="text-align:center;color:#64748b;">{c['total_roles']}</td>
+          <td data-sort-val="{c['pm_roles']}" style="text-align:center;color:#818cf8;font-weight:700;">{c['pm_roles']}</td>
+          <td data-sort-val="{c['total_roles']}" style="text-align:center;color:#64748b;">{c['total_roles']}</td>
           <td>{titles_html}</td>
           <td style="color:#64748b;font-size:0.75rem;white-space:nowrap;">{stage}</td>
           <td style="color:#64748b;font-size:0.75rem;">{funding}</td>
@@ -759,11 +759,13 @@ def _build_market_tab(
 
     <!-- Full company table -->
     <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:1px solid #2d3148;font-size:0.85rem;font-weight:700;color:#94a3b8;">
-        🏢 All Companies With PM Openings ({len(pm_companies)})
+      <div style="padding:12px 20px;border-bottom:1px solid #2d3148;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:0.85rem;font-weight:700;color:#94a3b8;">🏢 All Companies With PM Openings ({len(pm_companies)})</span>
+        <input type="text" id="marketSearch" placeholder="Filter by company…" oninput="filterMarket()"
+               style="margin-left:auto;padding:5px 10px;background:#0f1117;border:1px solid #2d3148;border-radius:6px;color:#e2e8f0;font-size:0.8rem;width:200px;">
       </div>
       <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+        <table id="marketTable" style="width:100%;border-collapse:collapse;font-size:0.82rem;">
           <thead>
             <tr style="border-bottom:1px solid #2d3148;">
               <th style="text-align:left;padding:10px 16px;color:#64748b;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Company</th>
@@ -911,7 +913,7 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
 
         rows_html += f"""
         <tr data-type="{rtype}" data-search="{search_text}">
-          <td title="{date_title_attr}" style="white-space:nowrap;color:#64748b;font-size:0.8rem;">{date_display}</td>
+          <td data-sort-val="{first_analyzed[:10] if first_analyzed else ''}" title="{date_title_attr}" style="white-space:nowrap;color:#64748b;font-size:0.8rem;">{date_display}</td>
           <td style="font-weight:600;color:#f1f5f9;">{company}</td>
           <td>
             <a href="{url}" target="_blank" onclick="event.stopPropagation()"
@@ -919,7 +921,7 @@ def _build_performance_tab(rejected_path: str = "./output/rejected_jobs.json") -
           </td>
           <td>{type_badge}</td>
           <td style="color:#94a3b8;font-size:0.78rem;max-width:260px;line-height:1.4;">{reason}</td>
-          <td style="text-align:center;color:{score_color};font-weight:600;">{score_display}</td>
+          <td data-sort-val="{score if score is not None else -1}" style="text-align:center;color:{score_color};font-weight:600;">{score_display}</td>
           <td style="color:#64748b;font-size:0.75rem;">{location}</td>
           <td style="color:#475569;font-size:0.75rem;">{source}</td>
         </tr>"""
@@ -1148,6 +1150,12 @@ def generate_dashboard(
     .perf-filter-btn:hover {{ color: #c7d2fe; }}
     #perfBody tr td {{ padding: 10px 14px; border-bottom: 1px solid #1e2235; vertical-align: top; }}
     #perfBody tr:hover td {{ background: #1e2235; }}
+
+    /* ── Sortable table headers ── */
+    th.sortable {{ cursor: pointer; user-select: none; white-space: nowrap; }}
+    th.sortable:hover {{ color: #94a3b8 !important; }}
+    th.sort-asc::after  {{ content: ' ↑'; color: #818cf8; font-size: 0.85em; }}
+    th.sort-desc::after {{ content: ' ↓'; color: #818cf8; font-size: 0.85em; }}
   </style>
 </head>
 <body>
@@ -1274,6 +1282,49 @@ def generate_dashboard(
       row.style.display = (statusOk && reviewOk) ? '' : 'none';
     }});
   }}
+
+  // ── Sortable table headers ──
+  function makeSortable(tableId) {{
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const ths = Array.from(table.querySelectorAll('thead th'));
+    ths.forEach((th, colIdx) => {{
+      th.classList.add('sortable');
+      th.addEventListener('click', () => {{
+        const wasAsc = th.classList.contains('sort-asc');
+        ths.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.add(wasAsc ? 'sort-desc' : 'sort-asc');
+        const asc = !wasAsc;
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {{
+          const aCell = a.cells[colIdx];
+          const bCell = b.cells[colIdx];
+          if (!aCell || !bCell) return 0;
+          const aVal = aCell.dataset.sortVal !== undefined ? aCell.dataset.sortVal : aCell.textContent.trim();
+          const bVal = bCell.dataset.sortVal !== undefined ? bCell.dataset.sortVal : bCell.textContent.trim();
+          const aNum = parseFloat(aVal);
+          const bNum = parseFloat(bVal);
+          if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
+          return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }});
+        rows.forEach(r => tbody.appendChild(r));
+      }});
+    }});
+  }}
+
+  function filterMarket() {{
+    const q = (document.getElementById('marketSearch')?.value || '').toLowerCase();
+    document.querySelectorAll('#marketTable tbody tr').forEach(row => {{
+      row.style.display = (!q || (row.dataset.search || '').includes(q)) ? '' : 'none';
+    }});
+  }}
+
+  (function initSortableTables() {{
+    makeSortable('crmTable');
+    makeSortable('perfTable');
+    makeSortable('marketTable');
+  }})();
 </script>
 
 </body>
