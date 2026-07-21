@@ -595,10 +595,15 @@ def _scrape_bamboohr(company: str, url: str) -> list:
 
 
 def _scrape_rippling(company: str, url: str) -> list:
-    """Rippling ATS — fetch JSON from their public jobs API."""
+    """Rippling ATS — try JSON API first, fall back to HTML scraping.
+
+    Rippling's public API (api.rippling.com) sometimes returns empty or requires
+    authentication depending on the account configuration.  When the API yields
+    zero jobs we fall back to parsing the HTML jobs page, which always contains
+    the listings in plain <a> tags regardless of JS rendering.
+    """
     from urllib.parse import urlparse
     try:
-        # URL: https://ats.rippling.com/{slug}/jobs
         slug    = urlparse(url).path.strip("/").split("/")[0]
         api_url = f"https://api.rippling.com/platform/api/ats/public/jobs?companySlug={slug}"
         headers = {"Accept": "application/json",
@@ -619,11 +624,19 @@ def _scrape_rippling(company: str, url: str) -> list:
                 url=job_url, description=item.get("description", "")[:3000],
                 source="company_site",
             ))
-        logger.info(f"{company} (Rippling): {len(jobs)} PM roles")
-        return jobs
+        if jobs:
+            logger.info(f"{company} (Rippling API): {len(jobs)} PM roles")
+            return jobs
+        # API returned empty — fall back to HTML scraping
+        logger.info(f"{company} (Rippling API): 0 results, falling back to HTML scrape")
     except Exception as e:
-        logger.error(f"{company} Rippling scrape failed: {e}")
-        return []
+        logger.warning(f"{company} Rippling API failed ({e}), falling back to HTML scrape")
+
+    # HTML fallback — ats.rippling.com job pages embed listings in plain <a> tags
+    jobs_page_url = f"https://ats.rippling.com/{urlparse(url).path.strip('/').split('/')[0]}/jobs"
+    html_jobs = _scrape_html_careers(company, jobs_page_url)
+    logger.info(f"{company} (Rippling HTML): {len(html_jobs)} PM roles")
+    return html_jobs
 
 
 def _scrape_html_careers(company: str, url: str) -> list:
