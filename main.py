@@ -117,7 +117,16 @@ def run(args):
                 logger.info(f"    {status}: {n}")
         except Exception as e:
             logger.warning(f"CRM sync failed: {e}")
-            crm = {}
+            crm_path = "./output/crm.json"
+            if os.path.exists(crm_path):
+                try:
+                    with open(crm_path) as f:
+                        crm = json.load(f)
+                    logger.info(f"  → Fell back to cached CRM: {len(crm.get('applications', []))} entries")
+                except Exception:
+                    crm = {}
+            else:
+                crm = {}
         from scripts.dashboard import generate_dashboard
         out = "./public/index.html" if args.headless else "./output/dashboard.html"
         generate_dashboard(scored_jobs, crm=crm, output_path=out)
@@ -243,6 +252,17 @@ def run(args):
         logger.info(f"  → {len(crm.get('applications', []))} applications tracked")
     except Exception as e:
         logger.warning(f"  Gmail CRM sync skipped: {e}")
+        # Fall back to the last known CRM from disk (S3 restore put it there).
+        # Without this, a transient Gmail failure wipes the CRM from the dashboard.
+        crm_path = "./output/crm.json"
+        if os.path.exists(crm_path):
+            try:
+                with open(crm_path) as f:
+                    crm = json.load(f)
+                logger.info(f"  → Fell back to cached CRM: {len(crm.get('applications', []))} entries"
+                            f" (last synced: {crm.get('last_synced', 'unknown')})")
+            except Exception as load_err:
+                logger.warning(f"  Could not load cached CRM either: {load_err}")
 
     if args.dry_run:
         logger.info("Dry run — skipping Sheet write and email send")
