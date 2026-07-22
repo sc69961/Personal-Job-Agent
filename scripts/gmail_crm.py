@@ -408,19 +408,21 @@ def sync_gmail_crm(config: dict) -> dict:
 
     # -----------------------------------------------------------------------
     # Pass 0: Re-scan existing active application threads for status updates.
-    # This catches rejections/offers that arrive as replies to already-seen
-    # threads (e.g. interview thread → recruiter sends rejection in same chain).
+    # This catches rejections/offers/new interview rounds that arrive as replies
+    # to already-seen threads (e.g. interview thread → second-round invite in
+    # same chain, or recruiter sends rejection as a reply).
     #
-    # Cost control: only rescan threads with last_activity in the past 14 days.
-    # Applications silent for 14+ days are unlikely to have new activity, and
-    # the auto-ghost pass will mark them ghosted at 30 days anyway.
+    # Cost control: rescan threads with last_activity within GHOST_AFTER_DAYS
+    # (matching the ghost cutoff so we never skip a thread that is still
+    # technically "active").  Previously used 14 days — too short; second-round
+    # invites often arrive 3-5 weeks after the first interview request.
     # -----------------------------------------------------------------------
     RESCAN_STATUSES = {"applied", "response_received", "interview_requested"}
-    rescan_cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    rescan_cutoff = (datetime.now() - timedelta(days=GHOST_AFTER_DAYS)).strftime("%Y-%m-%d")
     for app in crm["applications"]:
         last_active = app.get("last_activity", "")
         if last_active and last_active < rescan_cutoff:
-            continue  # silent for 14+ days — skip rescan, save tokens
+            continue  # beyond ghost window — skip rescan, save tokens
         if app.get("status") in RESCAN_STATUSES:
             for tid in app.get("thread_ids", []):
                 try:
@@ -452,21 +454,33 @@ def sync_gmail_crm(config: dict) -> dict:
                     if not result:
                         continue
                     new_status = result.get("status", "applied")
-                    if _should_upgrade_status(app.get("status", "applied"), new_status):
+                    status_changed = _should_upgrade_status(app.get("status", "applied"), new_status)
+
+                    # Always refresh mutable fields when the thread has new messages,
+                    # even if the status didn't change (e.g. second-round interview
+                    # invite keeps status = "interview_requested" but needs fresh
+                    # last_activity, recommended_action, and follow_up_date).
+                    if status_changed:
                         logger.info(f"  Thread rescan: {app.get('company')} '{app.get('job_title')}' "
                                     f"{app['status']} → {new_status} "
                                     f"(confidence {result.get('confidence', '?')})")
-                        app["status"]             = new_status
-                        app["status_label"]       = result.get("status_label", app.get("status_label", ""))
-                        app["last_activity"]      = result.get("last_activity", app.get("last_activity", ""))
-                        app["notes"]              = result.get("notes", app.get("notes", ""))
-                        app["recommended_action"] = result.get("recommended_action", "")
-                        app["confidence"]         = result.get("confidence", 80)
-                        if result.get("needs_review"):
-                            app["needs_review"]   = True
-                            app["match_reasoning"] = result.get("match_reasoning", "")
-                            needs_review_count += 1
-                        processed += 1
+                        app["status"]       = new_status
+                        app["status_label"] = result.get("status_label", app.get("status_label", ""))
+                    else:
+                        logger.info(f"  Thread rescan: {app.get('company')} '{app.get('job_title')}' "
+                                    f"status unchanged ({app['status']}), refreshing activity fields")
+
+                    # Refresh activity fields regardless of status change
+                    app["last_activity"]      = result.get("last_activity", app.get("last_activity", ""))
+                    app["notes"]              = result.get("notes", app.get("notes", ""))
+                    app["recommended_action"] = result.get("recommended_action", app.get("recommended_action", ""))
+                    app["follow_up_date"]     = result.get("follow_up_date", app.get("follow_up_date", ""))
+                    app["confidence"]         = result.get("confidence", 80)
+                    if result.get("needs_review"):
+                        app["needs_review"]    = True
+                        app["match_reasoning"] = result.get("match_reasoning", "")
+                        needs_review_count += 1
+                    processed += 1
                 except Exception as e:
                     logger.debug(f"  Thread rescan failed for {tid}: {e}")
 
