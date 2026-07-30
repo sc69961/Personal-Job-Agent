@@ -4,11 +4,15 @@ dashboard.py — Generates a two-tab local HTML dashboard:
   Tab 2: Application CRM (synced from Gmail)
 """
 
+import html as _html
 import json
+import logging
 import os
 import re
 import webbrowser
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +208,7 @@ def _status_rank(status: str) -> int:
     except ValueError:
         return -1
 
-def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
+def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None, presigned_map: dict = None) -> str:
     now = datetime.now()
 
     # Build CRM lookup: (normalized_company, normalized_title) → (status, status_label)
@@ -337,11 +341,24 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None) -> str:
         new_border = "border-color:#166534;" if (is_new and not archived) else ""
         dim_style  = "opacity:0.65;" if archived else ""
 
-        btn = (
-            f'<a href="{url}" target="_blank" class="apply-btn apply-btn-dim">View →</a>'
-            if archived else
-            f'<a href="{url}" target="_blank" class="apply-btn">Apply →</a>'
-        )
+        if archived:
+            btn = f'<a href="{url}" target="_blank" class="apply-btn apply-btn-dim">View →</a>'
+        else:
+            presigned_url = (presigned_map or {}).get(url, '')
+            if presigned_url:
+                company_safe  = _html.escape(j.get('company', ''), quote=True)
+                title_safe    = _html.escape(j.get('title', ''), quote=True)
+                presigned_safe = _html.escape(presigned_url, quote=True)
+                btn = (
+                    f'<button class="apply-btn" '
+                    f'data-company="{company_safe}" '
+                    f'data-title="{title_safe}" '
+                    f'data-url="{url}" '
+                    f'data-presigned="{presigned_safe}" '
+                    f'onclick="handleApply(event,this)">Apply →</button>'
+                )
+            else:
+                btn = f'<a href="{url}" target="_blank" class="apply-btn">Apply →</a>'
 
         # Collapsible body — hidden by default, revealed on card click
         body_html = ""
@@ -1033,7 +1050,71 @@ def generate_dashboard(
     crm       = crm or {}
     crm_count = len(crm.get("applications", []))
 
-    jobs_tab_html   = _build_jobs_tab(jobs, run_time, crm=crm)
+    # ── Apply-click tracking: generate pre-signed S3 PUT URLs ──────────────
+    # Each Apply button gets a unique pre-signed URL so the browser can log
+    # {company, job_title, job_url, clicked_at} to S3 when Steve clicks Apply.
+    # gmail_crm.py reads these logs to resolve job titles on confirmation emails
+    # that don't include them (e.g. Greenhouse sends from @greenhouse.io and
+    # sometimes omits the role name in the subject).
+    presigned_map: dict = {}
+    try:
+        import boto3
+        bucket = os.environ.get("S3_BUCKET_NAME", "")
+        key_id = os.environ.get("AWS_ACCESS_KEY_ID", "")
+        secret = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+        region = os.environ.get("AWS_REGION", "us-east-1")
+        if not (bucket and key_id):
+            try:
+                from config.config import (
+                    S3_BUCKET_NAME, AWS_ACCESS_KEY_ID,
+                    AWS_SECRET_ACCESS_KEY, AWS_REGION,
+                )
+                bucket = bucket or S3_BUCKET_NAME or ""
+                key_id = key_id or AWS_ACCESS_KEY_ID or ""
+                secret = secret or AWS_SECRET_ACCESS_KEY or ""
+                region = region or AWS_REGION or "us-east-1"
+            except ImportError:
+                pass
+        if bucket and key_id:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=key_id,
+                aws_secret_access_key=secret,
+                region_name=region,
+            )
+            # Ensure S3 CORS is set so the browser can PUT from Firebase hosting
+            try:
+                s3.put_bucket_cors(
+                    Bucket=bucket,
+                    CORSConfiguration={"CORSRules": [{
+                        "AllowedHeaders": ["*"],
+                        "AllowedMethods": ["PUT"],
+                        "AllowedOrigins": [
+                            "https://stevechristianmba-jobs.web.app",
+                            "https://stevechristianmba-jobs.firebaseapp.com",
+                            "http://localhost:*",
+                            "null",
+                        ],
+                        "MaxAgeSeconds": 86400,
+                    }]},
+                )
+            except Exception:
+                pass  # Non-fatal — bucket might already have CORS configured
+            run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            for i, job in enumerate(jobs):
+                jurl = job.get("url", "")
+                if jurl:
+                    key = f"apply_clicks/{run_ts}_{i:04d}.json"
+                    presigned_map[jurl] = s3.generate_presigned_url(
+                        "put_object",
+                        Params={"Bucket": bucket, "Key": key},
+                        ExpiresIn=72 * 3600,  # 72 h — covers next day's run
+                    )
+            logger.info(f"Generated {len(presigned_map)} apply-click tracking URLs")
+    except Exception as e:
+        logger.debug(f"Apply-click tracking unavailable: {e}")
+
+    jobs_tab_html   = _build_jobs_tab(jobs, run_time, crm=crm, presigned_map=presigned_map)
     crm_tab_html    = _build_crm_tab(crm)
     market_tab_html = _build_market_tab()
     perf_tab_html   = _build_performance_tab()
@@ -1104,7 +1185,7 @@ def generate_dashboard(
     .gaps strong {{ color: #fbbf24; }}
     .strengths ul, .gaps ul {{ margin-top: 5px; padding-left: 14px; color: #94a3b8; line-height: 1.6; }}
     .card-footer {{ margin-top: auto; padding-top: 8px; border-top: 1px solid #2d3148; }}
-    .apply-btn {{ display: inline-block; background: #4f6ef7; color: #fff; font-size: 0.82rem; font-weight: 600; padding: 8px 18px; border-radius: 7px; text-decoration: none; transition: background 0.2s; }}
+    .apply-btn {{ display: inline-block; background: #4f6ef7; color: #fff; font-size: 0.82rem; font-weight: 600; padding: 8px 18px; border-radius: 7px; text-decoration: none; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }}
     .apply-btn:hover {{ background: #3b55d4; }}
     .hidden {{ display: none !important; }}
     .empty-state {{ grid-column: 1/-1; text-align: center; color: #475569; padding: 60px 0; font-size: 1rem; }}
@@ -1199,6 +1280,28 @@ def generate_dashboard(
   function toggleCard(event, el) {{
     if (event.target.closest('.apply-btn, .apply-btn-dim')) return;
     el.classList.toggle('expanded');
+  }}
+
+  function handleApply(event, btn) {{
+    event.stopPropagation();
+    var company      = btn.dataset.company;
+    var title        = btn.dataset.title;
+    var jobUrl       = btn.dataset.url;
+    var presignedUrl = btn.dataset.presigned;
+    if (presignedUrl) {{
+      var payload = JSON.stringify({{
+        company: company,
+        job_title: title,
+        job_url: jobUrl,
+        clicked_at: new Date().toISOString()
+      }});
+      fetch(presignedUrl, {{
+        method: 'PUT',
+        body: payload,
+        headers: {{'Content-Type': 'application/json'}}
+      }}).catch(function(e) {{ console.warn('Apply tracking failed:', e); }});
+    }}
+    window.open(jobUrl, '_blank');
   }}
 
   let notAppliedActive = false;

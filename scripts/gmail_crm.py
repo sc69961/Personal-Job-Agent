@@ -384,6 +384,77 @@ def save_crm(crm: dict):
 
 
 # ---------------------------------------------------------------------------
+# Apply-click log helpers
+# ---------------------------------------------------------------------------
+
+def _load_apply_click_log(config: dict, hours: int = 72) -> list:
+    """
+    Read apply-click events that Steve logged from the dashboard (last N hours).
+    Each object: {company, job_title, job_url, clicked_at (ISO)}.
+    Returns [] if S3 is not configured or the prefix is empty.
+    """
+    clicks = []
+    try:
+        import boto3
+        bucket = config.get("S3_BUCKET_NAME", "") or os.environ.get("S3_BUCKET_NAME", "")
+        key_id = config.get("AWS_ACCESS_KEY_ID", "") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+        secret = config.get("AWS_SECRET_ACCESS_KEY", "") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+        region = config.get("AWS_REGION", "") or os.environ.get("AWS_REGION", "us-east-1")
+        if not (bucket and key_id):
+            return clicks
+        s3 = boto3.client("s3", aws_access_key_id=key_id,
+                          aws_secret_access_key=secret, region_name=region)
+        cutoff = datetime.now() - timedelta(hours=hours)
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix="apply_clicks/"):
+            for obj in page.get("Contents", []):
+                last_mod = obj["LastModified"].replace(tzinfo=None)
+                if last_mod < cutoff:
+                    continue
+                try:
+                    resp = s3.get_object(Bucket=bucket, Key=obj["Key"])
+                    click = json.loads(resp["Body"].read().decode())
+                    clicks.append(click)
+                except Exception:
+                    pass
+        if clicks:
+            logger.info(f"Loaded {len(clicks)} apply click(s) from S3 (last {hours}h)")
+    except Exception as e:
+        logger.debug(f"Could not load apply click log: {e}")
+    return clicks
+
+
+def _find_click_for_company(company: str, email_date: str, clicks: list,
+                             window_hours: int = 72) -> Optional[dict]:
+    """
+    Find the most recent apply click for a company that occurred within
+    window_hours before the email date.  Returns None if no match.
+    """
+    norm_co = _normalize_company(company)
+    try:
+        email_dt = datetime.strptime(email_date, "%Y-%m-%d")
+    except Exception:
+        email_dt = datetime.now()
+
+    best: Optional[dict] = None
+    best_dt: Optional[datetime] = None
+    for click in clicks:
+        if _normalize_company(click.get("company", "")) != norm_co:
+            continue
+        try:
+            click_dt = datetime.fromisoformat(click.get("clicked_at", "")).replace(tzinfo=None)
+        except Exception:
+            continue
+        # Accept clicks from up to window_hours before the email (plus 1 day slack)
+        diff_hours = (email_dt.replace(hour=23, minute=59) - click_dt).total_seconds() / 3600
+        if -24 <= diff_hours <= window_hours:
+            if best_dt is None or click_dt > best_dt:
+                best = click
+                best_dt = click_dt
+    return best
+
+
+# ---------------------------------------------------------------------------
 # Main sync
 # ---------------------------------------------------------------------------
 
@@ -396,6 +467,11 @@ def sync_gmail_crm(config: dict) -> dict:
     client  = Anthropic(api_key=api_key)
     service = _get_gmail_service(config["GOOGLE_CREDENTIALS_PATH"])
     crm     = load_crm()
+
+    # Load apply-click log: used in Pass 1 to fill in missing job titles on
+    # confirmation emails (e.g. Greenhouse sends from @greenhouse.io and
+    # sometimes doesn't include the role name in the subject or body).
+    apply_clicks = _load_apply_click_log(config)
 
     seen_thread_ids = {tid for app in crm["applications"] for tid in app.get("thread_ids", [])}
     app_by_id = {app["id"]: app for app in crm["applications"]}
@@ -524,6 +600,28 @@ def sync_gmail_crm(config: dict) -> dict:
                 confidence = result.get("confidence", 80)
                 flag_review = result.get("needs_review", False)
                 reasoning  = result.get("match_reasoning", "")
+
+                # ── Click-log title resolution ────────────────────────────
+                # If Claude couldn't extract a job title from the email (common
+                # with Greenhouse / generic ATS confirmation emails), check the
+                # apply-click log for a recent click on the same company.
+                # This matches the job the user clicked "Apply →" on the
+                # dashboard to the confirmation email that arrived afterwards.
+                if not job_title and company and apply_clicks:
+                    email_date = (result.get("applied_date")
+                                  or result.get("last_activity")
+                                  or datetime.now().strftime("%Y-%m-%d"))
+                    click = _find_click_for_company(company, email_date, apply_clicks)
+                    if click:
+                        job_title = click.get("job_title", "")
+                        if job_title:
+                            logger.info(
+                                f"  Click-log title match: {company} → '{job_title}' "
+                                f"(clicked {click.get('clicked_at', '')[:10]})"
+                            )
+                        # Backfill job_url from click if Claude didn't capture it
+                        if not result.get("job_url") and click.get("job_url"):
+                            result["job_url"] = click["job_url"]
 
                 # ── Three-layer matching (most → least reliable) ──────────
                 # 1. Recruiter email domain — catches recruiter replies on new
