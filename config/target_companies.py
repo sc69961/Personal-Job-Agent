@@ -28,6 +28,8 @@ CLIMATETECH_COMPANIES = [
     # Utilities / grid software / data
     "Pacific Gas & Electric", "Xcel Energy", "Avangrid", "Eversource",
     "National Grid", "Duke Energy", "Con Edison", "Ameren", "WEC Energy",
+    "Dominion Energy", "Southern California Edison", "Evergy",
+    "Portland General Electric", "Salt River Project",
     "Enel", "Engie", "Octopus Energy", "PowerSecure",
     "Arcadia", "Urjanet", "eSmart Systems", "GridX",
     "Sense", "Bidgely", "EnergyHub", "Logical Buildings", "Recurve Analytics",
@@ -42,7 +44,13 @@ CLIMATETECH_COMPANIES = [
     "NextEra Energy", "LevelTen Energy", "Pexapark", "Power Ledger",
 
     # Energy Software Platforms
-    "AspenTech", "Hitachi Energy", "Siemens Grid Software",
+    "AspenTech", "Hitachi Energy", "Siemens Grid Software", "Emerson Electric",
+
+    # Energy Services & Efficiency
+    "CLEAResult", "Ameresco", "AES Clean Energy", "NRG Energy",
+
+    # Energy Analytics & Data
+    "Wood Mackenzie", "S&P Global Commodity Insights",
 
     # Building Electrification
     "Dandelion Energy", "BlocPower", "Quilt",
@@ -171,6 +179,28 @@ COMPANY_CAREER_URLS = {
     # OhmConnect: removed — 404, URL dead
     # Enbala: removed — SSL cert expired, may be defunct
     "AutoGrid":             "https://jobs.ashbyhq.com/autogrid",                    # fixed: was HTML
+
+    # --- Utilities (new additions) ---
+    # Note: large utilities use Workday; instance numbers (wd1/wd5/wd12) can shift —
+    # if a URL 404s after a company rebrand, update the slug/instance number.
+    "Dominion Energy":      "https://dominionenergy.wd5.myworkdayjobs.com/Dominion_Energy",
+    "Southern California Edison": "https://edisonintl.wd5.myworkdayjobs.com/SCE_External",
+    "Evergy":               "https://evergy.wd5.myworkdayjobs.com/Evergy",
+    "Portland General Electric": "https://portlandgeneral.wd5.myworkdayjobs.com/PGE_Public",
+    "Salt River Project":   "https://www.srpnet.com/about/working-at-srp/open-positions", # uses internal ATS
+
+    # --- Energy Services & Efficiency ---
+    "CLEAResult":           "https://job-boards.greenhouse.io/clearesult",
+    "Ameresco":             "https://www.ameresco.com/careers/",                           # HTML fallback — no standard ATS
+    "AES Clean Energy":     "https://aes.wd1.myworkdayjobs.com/AES",
+    "NRG Energy":           "https://nrgenergy.wd1.myworkdayjobs.com/NRG",
+
+    # --- Energy Software Platforms ---
+    "Emerson Electric":     "https://emerson.wd5.myworkdayjobs.com/Emerson_Careers",
+
+    # --- Energy Analytics & Data ---
+    "Wood Mackenzie":       "https://job-boards.greenhouse.io/woodmackenzie",
+    "S&P Global Commodity Insights": "https://careers.spglobal.com/jobs",                 # Workday via S&P Global unified portal
 
     # --- Energy Trading ---
     "NextEra Energy":       "https://jobs.nexteraenergy.com/",
