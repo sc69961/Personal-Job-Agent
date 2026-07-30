@@ -154,6 +154,7 @@ COMPANY_CAREER_URLS = {
     "EVgo":                 "https://jobs.ashbyhq.com/evgo",                        # fixed: was HTML
     "ChargePoint":          "https://job-boards.greenhouse.io/chargepoint",
     "Form Energy":          "https://jobs.ashbyhq.com/formenergy",
+    "Euclid Power":         "https://jobs.ashbyhq.com/euclid-power",
 
     # --- Recommended additions based on profile ---
     "SPAN":                 "https://jobs.ashbyhq.com/span",                        # fixed: was HTML
