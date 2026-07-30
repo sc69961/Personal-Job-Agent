@@ -149,9 +149,16 @@ def run(args):
         if os.path.exists(crm_path):
             with open(crm_path) as f:
                 crm = json.load(f)
-        logger.info(f"Opening dashboard from cache ({len(scored_jobs)} jobs, {len(crm.get('applications',[]))} CRM entries)")
-        from scripts.dashboard import open_dashboard
-        open_dashboard(scored_jobs, crm=crm)
+        logger.info(f"Dashboard from cache ({len(scored_jobs)} jobs, {len(crm.get('applications',[]))} CRM entries)")
+        if args.headless:
+            # CI / deploy mode: write to public/index.html for Firebase, no browser
+            from scripts.dashboard import generate_dashboard
+            os.makedirs("./public", exist_ok=True)
+            generate_dashboard(scored_jobs, crm=crm, output_path="./public/index.html")
+            logger.info("  → Dashboard written to public/index.html")
+        else:
+            from scripts.dashboard import open_dashboard
+            open_dashboard(scored_jobs, crm=crm)
         return
 
     # ── 1. SCRAPE ─────────────────────────────────────────────────────────
