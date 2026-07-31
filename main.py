@@ -461,4 +461,10 @@ if __name__ == "__main__":
     parser.add_argument("--headless",   action="store_true", help="Cloud/CI mode: no browser, write HTML to public/")
     parser.add_argument("--crm-only",   action="store_true", help="Sync Gmail CRM only — no scraping or scoring")
     args = parser.parse_args()
-    run(args)
+    try:
+        run(args)
+    except Exception as exc:
+        logger.exception(f"Job Agent crashed with unhandled exception: {exc}")
+        # Exit 0 so GitHub Actions still runs persist/deploy steps.
+        # The exception is fully logged above for debugging.
+        raise SystemExit(0)

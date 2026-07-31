@@ -108,16 +108,21 @@ jobs:
       # market_stats: historical PM role trend data for Market Intel tab
       # [skip ci] prevents this commit from re-triggering the workflow.
       # git_safe_push.sh handles stale lock cleanup and push retry automatically.
+      # Run even if the agent crashed — ensures Firebase and git always get the
+      # latest data, and gives us a commit to inspect when debugging failures.
       - name: Persist data files to repo
+        if: always()
         run: |
           bash scripts/git_safe_push.sh \
             "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json output/seen_job_ids.json" \
             "chore: update job agent data [skip ci]"
 
       - name: Install Firebase CLI
+        if: always()
         run: npm install -g firebase-tools
 
       - name: Deploy to Firebase
+        if: always()
         run: firebase deploy --only hosting:jobs --token "${{ secrets.FIREBASE_TOKEN }}" || true
 
       - name: Upload run logs
