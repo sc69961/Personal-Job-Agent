@@ -180,14 +180,23 @@ COMPANY_CAREER_URLS = {
     # Enbala: removed — SSL cert expired, may be defunct
     "AutoGrid":             "https://jobs.ashbyhq.com/autogrid",                    # fixed: was HTML
 
-    # --- Utilities (new additions) ---
-    # Note: large utilities use Workday; instance numbers (wd1/wd5/wd12) can shift —
-    # if a URL 404s after a company rebrand, update the slug/instance number.
+    # --- Utilities ---
+    # Large utilities mostly use Workday; iCIMS used by several (National Grid, Con Ed).
+    # instance numbers (wd1/wd5/wd12) can shift — update slug if a URL 404s after rebrand.
     "Dominion Energy":      "https://dominionenergy.wd5.myworkdayjobs.com/Dominion_Energy",
     "Southern California Edison": "https://edisonintl.wd5.myworkdayjobs.com/SCE_External",
     "Evergy":               "https://evergy.wd5.myworkdayjobs.com/Evergy",
     "Portland General Electric": "https://portlandgeneral.wd5.myworkdayjobs.com/PGE_Public",
-    "Salt River Project":   "https://www.srpnet.com/about/working-at-srp/open-positions", # uses internal ATS
+    "Salt River Project":   "https://www.srpnet.com/about/working-at-srp/open-positions",
+    "Pacific Gas & Electric": "https://pge.wd5.myworkdayjobs.com/PGE_External",
+    "Xcel Energy":          "https://xcelenergy.wd5.myworkdayjobs.com/XcelEnergy",
+    "Duke Energy":          "https://duke-energy.wd1.myworkdayjobs.com/Duke_Energy_Careers",
+    "Avangrid":             "https://avangrid.wd1.myworkdayjobs.com/avangrid",
+    "Eversource":           "https://eversource.wd5.myworkdayjobs.com/External",
+    "National Grid":        "https://nationalgrids.icims.com/jobs/search",       # iCIMS
+    "Con Edison":           "https://conedison.icims.com/jobs/search",            # iCIMS
+    "Ameren":               "https://ameren.wd1.myworkdayjobs.com/AmerenCareers",
+    "WEC Energy":           "https://wecenergy.wd1.myworkdayjobs.com/WEC_Energy_Group",
 
     # --- Energy Services & Efficiency ---
     "CLEAResult":           "https://job-boards.greenhouse.io/clearesult",

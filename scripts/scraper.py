@@ -111,16 +111,20 @@ CLIMATEBASE_JOBS_URL = "https://climatebase.org/api/jobs/"
 def _parse_climatebase_results(results: list, max_jobs: int) -> list[dict]:
     """Parse raw Climatebase API results into normalized job dicts."""
     jobs = []
-    for item in results[:max_jobs]:
+    for item in results:
         title    = item.get("title", "")
         company  = item.get("company_name", item.get("company", {}).get("name", ""))
+        if not (title and company):
+            continue
+        if not _is_pm_role(title):
+            continue
+        if len(jobs) >= max_jobs:
+            break
         location = item.get("location", "Remote")
         url      = item.get("url") or item.get("apply_url") or item.get("job_url", "")
         desc     = item.get("description") or item.get("short_description", "")
         salary   = item.get("salary") or item.get("compensation", "")
         posted   = item.get("posted_at", "")[:10] if item.get("posted_at") else ""
-        if not (title and company):
-            continue
         jobs.append(make_job(
             title=title, company=company, location=location,
             url=url, description=desc, source="climatebase",
@@ -191,7 +195,7 @@ def scrape_climatebase(max_jobs: int = 50) -> list[dict]:
     Pull jobs from Climatebase. Tries the direct API first;
     falls back to Playwright browser rendering if blocked.
     """
-    params = {"page_size": min(max_jobs, 100), "ordering": "-posted_at", "job_type": "full-time"}
+    params = {"page_size": min(max_jobs, 100), "ordering": "-posted_at", "job_type": "full-time", "search": "product manager"}
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -373,6 +377,8 @@ def _detect_ats(url: str) -> tuple:
         return ("bamboohr", url)
     if "ats.rippling.com" in url:
         return ("rippling", url)
+    if ".icims.com" in url:
+        return ("icims", url)
     return ("html", url)
 
 
@@ -517,28 +523,33 @@ def _scrape_ashby(company: str, slug: str) -> list:
 
 def _scrape_workday(company: str, url: str) -> list:
     """
-    Workday has a hidden JSON API — no JS rendering needed.
+    Workday JSON API — no JS rendering needed.
     URL format: https://{tenant}.wd{n}.myworkdayjobs.com/{board}
+
+    Two-pass approach:
+      Pass 1 — POST /jobs with searchText="product manager" → get matching titles + externalPaths
+      Pass 2 — GET /jobs{externalPath} for each PM match → fetch full description
     """
-    import re
     from urllib.parse import urlparse
     try:
         parsed = urlparse(url)
-        host   = parsed.netloc  # e.g. stem.wd12.myworkdayjobs.com
-        path   = parsed.path.strip("/")  # e.g. StemInc or en-US/fluenceenergy-jobs
-        # Extract tenant from hostname
+        host   = parsed.netloc                  # e.g. stem.wd12.myworkdayjobs.com
+        path   = parsed.path.strip("/")         # e.g. StemInc or en-US/fluenceenergy-jobs
         tenant = host.split(".")[0]
-        # Extract board — last path segment
-        board  = path.split("/")[-1]
-        api_url = f"https://{host}/wday/cxs/{tenant}/{board}/jobs"
-        payload = {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": "product manager"}
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        }
-        resp = requests.post(api_url, json=payload, headers=headers, timeout=15)
+        board  = path.split("/")[-1]            # last segment = board name
+        api_base = f"https://{host}/wday/cxs/{tenant}/{board}"
+        ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        post_headers = {"Content-Type": "application/json", "User-Agent": ua}
+
+        # Pass 1: search for PM roles
+        resp = requests.post(
+            f"{api_base}/jobs",
+            json={"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": "product manager"},
+            headers=post_headers, timeout=15,
+        )
         resp.raise_for_status()
         data = resp.json()
+
         jobs = []
         for item in data.get("jobPostings", []):
             title = item.get("title", "")
@@ -548,9 +559,29 @@ def _scrape_workday(company: str, url: str) -> list:
             job_path  = item.get("externalPath", "")
             job_url   = f"https://{host}{job_path}" if job_path else url
             posted    = item.get("postedOn", "")[:10] if item.get("postedOn") else ""
+
+            # Pass 2: fetch full description from detail endpoint
+            desc = ""
+            salary_text = ""
+            if job_path:
+                try:
+                    detail_resp = requests.get(
+                        f"{api_base}/jobs{job_path}",
+                        headers={"User-Agent": ua}, timeout=10,
+                    )
+                    if detail_resp.status_code == 200:
+                        detail = detail_resp.json()
+                        info = detail.get("jobPostingInfo", detail)
+                        desc_html = info.get("jobDescription", "") or info.get("description", "")
+                        if desc_html:
+                            desc = BeautifulSoup(desc_html, "html.parser").get_text()[:3000]
+                            salary_text = _extract_salary_from_text(desc)
+                except Exception:
+                    pass  # detail fetch is best-effort; empty description is fine
+
             jobs.append(make_job(
                 title=title, company=company, location=location,
-                url=job_url, description=item.get("jobReqId", ""),
+                url=job_url, description=desc, salary_text=salary_text,
                 source="company_site", posted_date=posted,
             ))
         logger.info(f"{company} (Workday): {len(jobs)} PM roles")
@@ -639,6 +670,74 @@ def _scrape_rippling(company: str, url: str) -> list:
     return html_jobs
 
 
+def _scrape_icims(company: str, url: str) -> list:
+    """
+    iCIMS ATS — uses the keyword search endpoint then parses HTML results.
+    URL pattern: https://{tenant}.icims.com/jobs/search  or  https://{tenant}.icims.com/jobs
+    """
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        search_url = f"{base}/jobs/search"
+        params = {
+            "pr":             "0",
+            "keyword":        "product manager",
+            "searchLocation": "",
+            "searchRadius":   "50",
+            "in_iframe":      "1",
+        }
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        resp = requests.get(search_url, params=params, headers=headers, timeout=20)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        jobs = []
+        seen = set()
+
+        # iCIMS search results embed job links in <a> tags — title is the link text.
+        # Job detail URLs follow pattern: /{tenant}.icims.com/jobs/{id}/job
+        for a in soup.find_all("a", href=True):
+            title = a.get_text(strip=True)
+            if not title or len(title) < 5 or len(title) > 120:
+                continue
+            if not _is_pm_role(title):
+                continue
+            href = a["href"]
+            if not href.startswith("http"):
+                href = base + href if href.startswith("/") else None
+            if not href or href in seen:
+                continue
+            seen.add(href)
+
+            # Location is usually in a sibling element within the same row/card
+            parent = a.find_parent("tr") or a.find_parent("li") or a.find_parent("div")
+            location = "See listing"
+            if parent:
+                loc_el = parent.find(
+                    class_=lambda c: c and any(k in (c or "") for k in ("location", "city", "geo"))
+                )
+                if loc_el:
+                    location = loc_el.get_text(strip=True)
+
+            jobs.append(make_job(
+                title=title, company=company, location=location,
+                url=href, description="", source="company_site",
+            ))
+
+        logger.info(f"{company} (iCIMS): {len(jobs)} PM roles")
+        return jobs
+    except Exception as e:
+        logger.error(f"{company} iCIMS scrape failed: {e}")
+        return []
+
+
 def _scrape_html_careers(company: str, url: str) -> list:
     """Generic HTML scraper — finds links whose text matches PM keywords."""
     from urllib.parse import urlparse
@@ -710,6 +809,8 @@ def scrape_company_sites(max_jobs: int = 200) -> list:
                 batch = _scrape_bamboohr(company, slug_or_url)
             elif ats_type == "rippling":
                 batch = _scrape_rippling(company, slug_or_url)
+            elif ats_type == "icims":
+                batch = _scrape_icims(company, slug_or_url)
             else:
                 batch = _scrape_html_careers(company, slug_or_url)
             all_jobs.extend(batch)

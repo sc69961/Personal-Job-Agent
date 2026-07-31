@@ -258,17 +258,26 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None, presigned_map: 
             return ""
 
     def _is_stale(j) -> bool:
-        """True if first_seen is older than 7 days."""
+        """
+        True if the job has aged out of the action queue.
+        Threshold is score-aware so high-signal roles stay visible longer:
+          score ≥ 75  → 21 days  (strong match, worth applying even if older)
+          score ≥ 55  → 14 days  (solid match)
+          score <  55 → 7 days   (marginal match, archive quickly)
+        """
         fs = j.get("first_seen", "")
         if not fs:
             return False
+        score = j.get("score") or 0
+        days = 21 if score >= 75 else (14 if score >= 55 else 7)
         try:
-            return (now - datetime.fromisoformat(fs)) > timedelta(days=7)
+            age = now - datetime.fromisoformat(fs)
         except ValueError:
             try:
-                return (now - datetime.strptime(fs, "%Y-%m-%d")).days > 7
+                age = now - datetime.strptime(fs, "%Y-%m-%d")
             except Exception:
                 return False
+        return age > timedelta(days=days)
 
     # ── Sort: NEW first (within 24h), then by score descending ──
     sorted_jobs = sorted(jobs, key=lambda j: (0 if _is_new(j) else 1, -j.get("score", 0)))
@@ -432,7 +441,7 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None, presigned_map: 
     if archive_pairs:
         archive_section = f"""
     <div class="archive-header" id="archiveToggleBtn" onclick="toggleArchive()">
-      <span>📦 Archive — applied &amp; jobs older than 7 days
+      <span>📦 Archive — applied &amp; aged out (7–21 days by score)
         <strong style="color:#94a3b8;">({archive_count})</strong></span>
       <span id="archiveArrow" style="font-size:0.75rem;">▼ Show</span>
     </div>
@@ -491,7 +500,7 @@ def _build_jobs_tab(jobs: list, run_time: str, crm: dict = None, presigned_map: 
     <div class="section-label">
       ⚡ Action queue
       <span class="section-count" id="actionCountBadge">{action_count}</span>
-      <span style="font-size:0.75rem;color:#475569;margin-left:6px;">· Unapplied · Seen within 7 days · Newest first</span>
+      <span style="font-size:0.75rem;color:#475569;margin-left:6px;">· Unapplied · Not yet aged out (7–21 days by score) · Newest first</span>
     </div>
 
     <div class="grid" id="grid">
