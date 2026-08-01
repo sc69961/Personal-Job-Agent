@@ -173,7 +173,9 @@ def run(args):
         from scripts.scraper import scrape_all
         raw_jobs = scrape_all(max_per_source=config["MAX_JOBS_PER_SOURCE"])
 
-        # Deduplicate by URL — same job posted on multiple boards
+        # ── Dedup pass 1: exact URL match ────────────────────────────────────
+        # Catches the same posting scraped by two different scrapers pointing at
+        # the exact same URL (e.g. company site + climate board both link to GH).
         seen_urls = set()
         deduped = []
         for job in raw_jobs:
@@ -184,8 +186,43 @@ def run(args):
                 seen_urls.add(url)
             deduped.append(job)
         if len(deduped) < len(raw_jobs):
-            logger.info(f"  → Removed {len(raw_jobs) - len(deduped)} duplicate URLs")
+            logger.info(f"  → Dedup pass 1 (URL): removed {len(raw_jobs) - len(deduped)} duplicate URLs")
         raw_jobs = deduped
+
+        # ── Dedup pass 2: company + normalized title ──────────────────────────
+        # Catches cross-source duplicates where the same job appears under
+        # different URLs — e.g. Climatebase links climatebase.org/jobs/X while
+        # the direct Ashby scraper links jobs.ashbyhq.com/uplight/Y for the same
+        # role. Same company + same normalized title → keep the copy with the
+        # richer description (more text = more signal for the scorer).
+        import re as _re
+
+        def _norm_co(s):
+            s = _re.sub(r'\b(inc\.?|llc\.?|corp\.?|co\.?|ltd\.?|group)\b', '', s.lower())
+            return _re.sub(r'[^a-z0-9]', '', s)
+
+        def _norm_title(s):
+            s = s.lower()
+            s = _re.sub(r'\b(sr\.?|snr\.?)\b', 'senior', s)
+            s = _re.sub(r'\bpm\b', 'product manager', s)
+            s = _re.sub(r'[^a-z0-9 ]', ' ', s)
+            return _re.sub(r'\s+', ' ', s).strip()
+
+        seen_co_title = {}   # (norm_company, norm_title) → index in deduped2
+        deduped2 = []
+        for job in raw_jobs:
+            key = (_norm_co(job.get("company", "")), _norm_title(job.get("title", "")))
+            if key in seen_co_title:
+                # Keep whichever has the longer description (more scoring signal)
+                idx = seen_co_title[key]
+                if len(job.get("description", "")) > len(deduped2[idx].get("description", "")):
+                    deduped2[idx] = job
+            else:
+                seen_co_title[key] = len(deduped2)
+                deduped2.append(job)
+        if len(deduped2) < len(raw_jobs):
+            logger.info(f"  → Dedup pass 2 (company+title): removed {len(raw_jobs) - len(deduped2)} cross-source duplicates")
+        raw_jobs = deduped2
 
         with open(raw_jobs_path, "w") as f:
             json.dump(raw_jobs, f, indent=2)

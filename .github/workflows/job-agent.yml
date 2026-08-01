@@ -2,7 +2,7 @@ name: Job Agent — Daily Run
 
 on:
   schedule:
-    - cron: '30 12 * * *'   # 6:30 AM MT daily
+    - cron: '30 12 * * 1-5'   # 6:30 AM MT weekdays only (Mon–Fri)
   workflow_dispatch:
     inputs:
       force_email:
