@@ -26,6 +26,8 @@ S3_FILES = [
     "output/crm.json",
     # seen_job_ids.json: all-time scraped IDs; prevents re-scoring after cache wipes
     "output/seen_job_ids.json",
+    # applied_company_urls.json: auto-registered career pages from CRM detections
+    "output/applied_company_urls.json",
 ]
 
 

@@ -782,14 +782,75 @@ def _scrape_html_careers(company: str, url: str) -> list:
         return []
 
 
+def _infer_career_url(job_url: str) -> str:
+    """
+    From a specific job application URL, infer the company's general career board URL.
+    Used by the auto-add feature: when the CRM detects a new application, we register
+    the company's career page so future scrape runs cover it automatically.
+
+    Returns a board-level URL compatible with _detect_ats(), or '' if not inferrable.
+    """
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(job_url)
+        netloc = parsed.netloc
+        parts  = [p for p in parsed.path.strip("/").split("/") if p]
+
+        if "ashbyhq.com" in netloc and parts:
+            return f"https://jobs.ashbyhq.com/{parts[0]}"
+        if "eu.greenhouse.io" in netloc and parts:
+            return f"https://job-boards.eu.greenhouse.io/{parts[0]}"
+        if "greenhouse.io" in netloc and parts:
+            return f"https://job-boards.greenhouse.io/{parts[0]}"
+        if "lever.co" in netloc and parts:
+            return f"https://jobs.lever.co/{parts[0]}"
+        if "workable.com" in netloc and parts:
+            return f"https://apply.workable.com/{parts[0]}/"
+        if "myworkdayjobs.com" in netloc and parts:
+            return f"https://{netloc}/{parts[0]}"
+        if "ats.rippling.com" in netloc and parts:
+            return f"https://ats.rippling.com/{parts[0]}/jobs"
+        if ".icims.com" in netloc:
+            return f"https://{netloc}/jobs/search"
+        if "bamboohr.com" in netloc:
+            return f"https://{netloc}/careers"
+        # Generic fallback — just the base URL
+        return f"{parsed.scheme}://{netloc}"
+    except Exception:
+        return ""
+
+
 def scrape_company_sites(max_jobs: int = 200) -> list:
-    """Scrape each company's career page directly using the best available method."""
+    """Scrape each company's career page directly using the best available method.
+
+    Merges two URL sources:
+      1. COMPANY_CAREER_URLS  — statically configured in target_companies.py
+      2. applied_company_urls.json — dynamically registered when CRM detects a
+         new application at a company not already in the static list
+    Static entries take priority (manually verified > inferred).
+    """
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from config.target_companies import COMPANY_CAREER_URLS
 
+    # Load dynamically registered companies
+    applied_path = "./output/applied_company_urls.json"
+    applied_urls: dict = {}
+    if os.path.exists(applied_path):
+        try:
+            import json as _json
+            with open(applied_path) as _f:
+                applied_urls = _json.load(_f)
+            if applied_urls:
+                logger.info(f"  Loaded {len(applied_urls)} auto-registered company URLs from applied_company_urls.json")
+        except Exception:
+            pass
+
+    # Static config wins over auto-inferred
+    merged_urls = {**applied_urls, **COMPANY_CAREER_URLS}
+
     all_jobs = []
-    for company, url in COMPANY_CAREER_URLS.items():
+    for company, url in merged_urls.items():
         try:
             time.sleep(1)
             ats_type, slug_or_url = _detect_ats(url)

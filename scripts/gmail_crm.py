@@ -455,6 +455,49 @@ def _find_click_for_company(company: str, email_date: str, clicks: list,
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Auto-register career page URLs for newly applied companies
+# ---------------------------------------------------------------------------
+
+def _register_applied_career_url(company: str, job_url: str) -> None:
+    """
+    When the CRM detects a new application, infer the company's career board
+    URL from the job URL and persist it to output/applied_company_urls.json.
+    On the next scrape run, scrape_company_sites() will pick it up automatically
+    so any future openings at this company land in Steve's dashboard.
+
+    Skips companies already covered by the static COMPANY_CAREER_URLS config.
+    """
+    if not company or not job_url:
+        return
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), ".."))
+        from config.target_companies import COMPANY_CAREER_URLS
+        if company in COMPANY_CAREER_URLS:
+            return  # already statically configured
+
+        from scripts.scraper import _infer_career_url
+        career_url = _infer_career_url(job_url)
+        if not career_url:
+            return
+
+        applied_path = "./output/applied_company_urls.json"
+        try:
+            with open(applied_path) as _f:
+                applied: dict = json.load(_f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            applied = {}
+
+        if company not in applied:
+            applied[company] = career_url
+            with open(applied_path, "w") as _f:
+                json.dump(applied, _f, indent=2, sort_keys=True)
+            logger.info(f"  ✚ Auto-registered career URL: '{company}' → {career_url}")
+    except Exception as e:
+        logger.debug(f"Could not auto-register career URL for '{company}': {e}")
+
+
 # Main sync
 # ---------------------------------------------------------------------------
 
@@ -711,6 +754,10 @@ def sync_gmail_crm(config: dict) -> dict:
                     # Register domains for future matching
                     for d in thread_domains:
                         domain_map.setdefault(d, []).append(aid)
+                    # Auto-register career page URL so future scrape runs cover
+                    # this company even if it's not in target_companies.py
+                    if new_app.get("job_url"):
+                        _register_applied_career_url(company, new_app["job_url"])
 
                 processed += 1
 

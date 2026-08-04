@@ -52,8 +52,27 @@ CLIMATETECH_COMPANIES = [
     # Energy Analytics & Data
     "Wood Mackenzie", "S&P Global Commodity Insights",
 
-    # Building Electrification
+    # Building / Home Electrification
     "Dandelion Energy", "BlocPower", "Quilt",
+    "ZeroHomes", "Jetson Home",
+
+    # Energy Market Software & Analytics
+    "Energy Exemplar", "Verse", "PowerPlan",
+
+    # Industrial AI / Efficiency
+    "Phaidra",
+
+    # Climate Risk & Wildfire
+    "Pano AI",
+
+    # Solar Asset Management
+    "SunStrong Management",
+
+    # Power / Energy Equipment
+    "Advanced Energy", "Verantum",
+
+    # Utility Customer Platforms
+    "Bellawatt",
 
     # ESG / Sustainability Software (carbon accounting, ESG data, net-zero platforms)
     "Watershed", "Persefoni", "Measurabl", "Sweep", "Greenly",
@@ -90,6 +109,21 @@ FINTECH_AI_COMPANIES = [
     # IoT / Smart Building Software
     "Honeywell Forge", "Johnson Controls OpenBlue", "Turntide Technologies",
     "Willow", "Gridium",
+
+    # Big Tech (Steve has applied; sustainability/energy PM roles)
+    "Google", "Meta",
+
+    # Fintech
+    "Visa",
+
+    # Smart Home
+    "Vivint",
+
+    # Real Estate / Logistics (sustainability angle)
+    "Prologis",
+
+    # Power Distribution Equipment
+    "Trystar",
 ]
 
 # All company names flattened (used for matching)
@@ -269,6 +303,50 @@ COMPANY_CAREER_URLS = {
     "Turntide Technologies": "https://job-boards.greenhouse.io/turntide",
     "Willow":               "https://jobs.lever.co/willowtwin",
     "Gridium":              "https://jobs.lever.co/gridium",
+
+    # ================================================================
+    # Applied Companies — added from Steve's resume vault
+    # Agent will continue monitoring these for new openings
+    # ================================================================
+
+    # Energy market modeling & intelligence
+    "Energy Exemplar":      "https://job-boards.greenhouse.io/energyexemplarllc",  # PLEXOS / Aurora software
+    "Verse":                "https://job-boards.greenhouse.io/verse",               # energy cost intelligence / DER platform
+
+    # Industrial AI / energy efficiency
+    "Phaidra":              "https://job-boards.greenhouse.io/phaidra",             # AI for industrial facilities
+
+    # Climate risk / wildfire detection
+    "Pano AI":              "https://jobs.lever.co/pano",
+
+    # Home & building electrification
+    "ZeroHomes":            "https://jobs.lever.co/zerohomes",                      # Denver-based home electrification
+    "Jetson Home":          "https://www.jetsonhome.com/us/careers",                # home electrification (HTML)
+
+    # Energy software / financial
+    "PowerPlan":            "https://careers-powerplan.icims.com/jobs/search",      # energy tax & accounting software (iCIMS)
+
+    # Utility customer DER platform
+    "Bellawatt":            "https://www.bellawatt.com/careers",                    # utility EV/solar customer onboarding (HTML)
+
+    # Solar asset management
+    "SunStrong Management": "https://www.sunstrongmanagement.com/company/careers/", # residential solar portfolio mgmt (HTML)
+
+    # Power / energy hardware & equipment
+    "Advanced Energy":      "https://jobs.advanced-energy.com/",                    # precision power conversion (HTML)
+    "Trystar":              "https://www.trystar.com/careers/",                     # power distribution equipment (HTML)
+
+    # Misc applied companies
+    "Verantum":             "https://verantum.com/careers/",                        # (HTML)
+
+    # Smart home (Vivint also has energy mgmt products)
+    "Vivint":               "https://vivint.wd5.myworkdayjobs.com/vivintjobs",      # smart home / energy (Workday)
+
+    # Fintech / big tech (Steve has applied; PM roles in payments/sustainability)
+    "Visa":                 "https://visa.wd5.myworkdayjobs.com/Visa",              # payments (Workday)
+    "Prologis":             "https://prologis.wd5.myworkdayjobs.com/en-US/Prologis_External_Careers",  # logistics real estate (Workday)
+    "Google":               "https://careers.google.com/jobs/results/?q=product+manager&employment_type=FULL_TIME",  # (HTML)
+    "Meta":                 "https://www.metacareers.com/jobs?roles[0]=individual+contributor&teams[0]=Product+Management",  # (HTML)
 }
 
 def get_company_tier(company_name: str) -> str:
