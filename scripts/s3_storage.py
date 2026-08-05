@@ -10,6 +10,8 @@ Files managed:
   output/first_seen_registry.json — first-seen timestamps
   output/rejected_jobs.json       — pipeline / performance log
   output/market_stats.json        — historical PM role trends
+  config/google_token.pickle      — OAuth token (always-overwrite; survives
+                                    7-day Actions cache expiry)
 """
 
 import os
@@ -28,6 +30,13 @@ S3_FILES = [
     "output/seen_job_ids.json",
     # applied_company_urls.json: auto-registered career pages from CRM detections
     "output/applied_company_urls.json",
+]
+
+# Files that are ALWAYS downloaded from S3, even if a local copy exists.
+# The Google token is refreshed each run and must be persisted to S3 so that
+# a GitHub Actions cache miss doesn't fall back to the stale Secret version.
+S3_FORCE_RESTORE = [
+    "config/google_token.pickle",
 ]
 
 
@@ -73,9 +82,10 @@ def restore(config: dict) -> None:
         return
 
     downloaded, skipped = 0, 0
-    for local_path in S3_FILES:
+    all_files = [(p, False) for p in S3_FILES] + [(p, True) for p in S3_FORCE_RESTORE]
+    for local_path, force in all_files:
         key = os.path.basename(local_path)
-        if os.path.exists(local_path):
+        if os.path.exists(local_path) and not force:
             logger.info(f"S3 restore: {key} already local — skipping")
             skipped += 1
             continue
@@ -84,7 +94,8 @@ def restore(config: dict) -> None:
         try:
             s3.download_file(bucket, key, local_path)
             size_kb = os.path.getsize(local_path) // 1024 if os.path.exists(local_path) else 0
-            logger.info(f"S3 restore: downloaded {key} ({size_kb} KB)")
+            label = " (force-overwrite)" if force else ""
+            logger.info(f"S3 restore: downloaded {key}{label} ({size_kb} KB)")
             downloaded += 1
         except Exception as e:
             err = str(e)
@@ -112,7 +123,7 @@ def backup(config: dict) -> None:
         return
 
     uploaded, missing = 0, 0
-    for local_path in S3_FILES:
+    for local_path in list(S3_FILES) + list(S3_FORCE_RESTORE):
         if not os.path.exists(local_path):
             missing += 1
             continue
