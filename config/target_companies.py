@@ -347,6 +347,12 @@ COMPANY_CAREER_URLS = {
     "Prologis":             "https://prologis.wd5.myworkdayjobs.com/en-US/Prologis_External_Careers",  # logistics real estate (Workday)
     "Google":               "https://careers.google.com/jobs/results/?q=product+manager&employment_type=FULL_TIME",  # (HTML)
     "Meta":                 "https://www.metacareers.com/jobs?roles[0]=individual+contributor&teams[0]=Product+Management",  # (HTML)
+
+    # Travel fintech
+    "Engine":               "https://job-boards.greenhouse.io/engine",              # business travel / spend management (Greenhouse)
+
+    # AI customer experience
+    "Crescendo":            "https://www.crescendo.ai/careers",                     # AI-powered CX platform (HTML)
 }
 
 def get_company_tier(company_name: str) -> str:
