@@ -595,7 +595,10 @@ def sync_gmail_crm(config: dict) -> dict:
                     app["recommended_action"] = result.get("recommended_action", app.get("recommended_action", ""))
                     app["follow_up_date"]     = result.get("follow_up_date", app.get("follow_up_date", ""))
                     app["confidence"]         = result.get("confidence", 80)
-                    if result.get("needs_review"):
+                    # Only re-flag if the user hasn't already manually resolved this entry.
+                    # user_confirmed=True is set by resolve_review.py / clear_review.py
+                    # to prevent the rescan loop from re-raising the same stale flag.
+                    if result.get("needs_review") and not app.get("user_confirmed"):
                         app["needs_review"]    = True
                         app["match_reasoning"] = result.get("match_reasoning", "")
                         needs_review_count += 1
@@ -713,13 +716,13 @@ def sync_gmail_crm(config: dict) -> dict:
                         app["job_title"] = job_title
                     if not app.get("job_url"):
                         app["job_url"] = _try_match_url(company)
-                    if flag_review:
+                    if flag_review and not app.get("user_confirmed"):
                         app["needs_review"]    = True
                         app["match_reasoning"] = reasoning
                         needs_review_count += 1
                         logger.info(f"  ⚠ Low confidence ({confidence}) match: "
                                     f"{company} '{job_title}' — {reasoning}")
-                    else:
+                    elif not flag_review:
                         app.pop("needs_review", None)
                         app.pop("match_reasoning", None)
 
