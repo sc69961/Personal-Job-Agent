@@ -348,6 +348,10 @@ COMPANY_CAREER_URLS = {
     "Google":               "https://careers.google.com/jobs/results/?q=product+manager&employment_type=FULL_TIME",  # (HTML)
     "Meta":                 "https://www.metacareers.com/jobs?roles[0]=individual+contributor&teams[0]=Product+Management",  # (HTML)
 
+    # --- Large enterprise / equipment ---
+    "Itron":                "https://itron.wd5.myworkdayjobs.com/Itron",             # smart grid / metering (Workday)
+    "Landis+Gyr":           "https://careers.landisgyr.com/search?q=product+manager",  # smart metering (SAP SF, HTML-parseable search)
+
     # Travel fintech
     "Engine":               "https://job-boards.greenhouse.io/engine",              # business travel / spend management (Greenhouse)
 
