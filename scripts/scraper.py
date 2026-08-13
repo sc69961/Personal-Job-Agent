@@ -379,6 +379,8 @@ def _detect_ats(url: str) -> tuple:
         return ("rippling", url)
     if ".icims.com" in url:
         return ("icims", url)
+    if "jobvite.com" in url:
+        return ("jobvite", url)
     return ("html", url)
 
 
@@ -738,6 +740,113 @@ def _scrape_icims(company: str, url: str) -> list:
         return []
 
 
+def _scrape_jobvite(company: str, url: str) -> list:
+    """
+    Jobvite ATS — hits the keyword search endpoint and parses HTML job listings.
+
+    URL patterns accepted:
+      https://jobs.jobvite.com/{slug}
+      https://jobs.jobvite.com/{slug}/jobs
+      https://{company}.careers.jobvite.com
+
+    Strategy:
+      1. Build a PM-filtered search URL from the slug.
+      2. Parse HTML for job links (Jobvite renders results server-side on the
+         search page, so no JavaScript execution needed).
+      3. Fall back to any <a href*="/job/"> link if structured selectors miss.
+
+    Note: Jobvite embeds (JavaScript widget on company's own domain) cannot be
+    scraped this way — the slug must be known and the jobs.jobvite.com URL used.
+    """
+    from urllib.parse import urlparse
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+    }
+
+    try:
+        parsed = urlparse(url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+
+        # Build PM-filtered search URL
+        if "jobs.jobvite.com" in parsed.netloc:
+            slug = path_parts[0] if path_parts else ""
+            if not slug:
+                logger.warning(f"{company} (Jobvite): no slug found in URL {url}")
+                return []
+            search_url = f"https://jobs.jobvite.com/{slug}/search?q=product+manager"
+        else:
+            # Subdomain pattern: {company}.careers.jobvite.com
+            search_url = f"{base}/search?q=product+manager"
+
+        resp = requests.get(search_url, headers=headers, timeout=25)
+
+        # Jobvite redirects invalid slugs to its support page
+        if "jobvite.com/support" in resp.url or "invalid=1" in resp.url:
+            logger.warning(f"{company} (Jobvite): slug invalid or company not found — URL: {url}")
+            return []
+
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        jobs = []
+        seen = set()
+
+        # Jobvite renders results with several possible HTML structures depending
+        # on the theme version.  Try structured selectors first, then fall back.
+        structured = (
+            soup.select("a.jv-job-list-name")          # classic theme
+            or soup.select("li.jv-job-list-item a")     # list theme
+            or soup.select(".jv-job-item a")            # card theme
+            or soup.select("a[href*='/job/']")          # generic fallback
+        )
+
+        for a in structured:
+            title = a.get_text(strip=True)
+            if not title or len(title) < 5 or len(title) > 120:
+                continue
+            if not _is_pm_role(title):
+                continue
+
+            href = a.get("href", "")
+            if href.startswith("/"):
+                href = base + href
+            elif not href.startswith("http"):
+                continue
+            if href in seen:
+                continue
+            seen.add(href)
+
+            # Location: look in the enclosing card/row
+            parent = a.find_parent("li") or a.find_parent("tr") or a.find_parent("div")
+            location = "See listing"
+            if parent:
+                loc_el = (
+                    parent.find(class_=lambda c: c and "location" in (c or "").lower())
+                    or parent.find("span", class_="jv-job-list-location")
+                )
+                if loc_el:
+                    location = loc_el.get_text(strip=True)
+
+            jobs.append(make_job(
+                title=title, company=company, location=location,
+                url=href, description="", source="company_site",
+            ))
+
+        logger.info(f"{company} (Jobvite): {len(jobs)} PM roles")
+        return jobs
+
+    except Exception as e:
+        logger.error(f"{company} Jobvite scrape failed: {e}")
+        return []
+
+
 def _scrape_html_careers(company: str, url: str) -> list:
     """Generic HTML scraper — finds links whose text matches PM keywords."""
     from urllib.parse import urlparse
@@ -812,6 +921,8 @@ def _infer_career_url(job_url: str) -> str:
             return f"https://ats.rippling.com/{parts[0]}/jobs"
         if ".icims.com" in netloc:
             return f"https://{netloc}/jobs/search"
+        if "jobs.jobvite.com" in netloc and parts:
+            return f"https://jobs.jobvite.com/{parts[0]}"
         if "bamboohr.com" in netloc:
             return f"https://{netloc}/careers"
         # Generic fallback — just the base URL
@@ -872,6 +983,8 @@ def scrape_company_sites(max_jobs: int = 200) -> list:
                 batch = _scrape_rippling(company, slug_or_url)
             elif ats_type == "icims":
                 batch = _scrape_icims(company, slug_or_url)
+            elif ats_type == "jobvite":
+                batch = _scrape_jobvite(company, slug_or_url)
             else:
                 batch = _scrape_html_careers(company, slug_or_url)
             all_jobs.extend(batch)

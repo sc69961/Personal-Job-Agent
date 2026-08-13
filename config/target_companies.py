@@ -351,6 +351,10 @@ COMPANY_CAREER_URLS = {
     # --- Large enterprise / equipment ---
     "Itron":                "https://itron.wd5.myworkdayjobs.com/Itron",             # smart grid / metering (Workday)
     "Landis+Gyr":           "https://careers.landisgyr.com/search?q=product+manager",  # smart metering (SAP SF, HTML-parseable search)
+    # Enphase uses Jobvite (embed on enphase.com/careers — slug not exposed in URL).
+    # To add: open enphase.com/careers in Chrome, run in console:
+    #   document.querySelector('[data-provider]')?.dataset  or search page source for jobvite.com/{slug}
+    # Then add: "Enphase": "https://jobs.jobvite.com/{slug}"
 
     # Travel fintech
     "Engine":               "https://job-boards.greenhouse.io/engine",              # business travel / spend management (Greenhouse)
