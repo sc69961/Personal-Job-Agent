@@ -62,6 +62,12 @@ CLIMATETECH_COMPANIES = [
     # Industrial AI / Efficiency
     "Phaidra",
 
+    # Industrial Analytics (energy / manufacturing)
+    "Seeq",
+
+    # Home Energy Management (acquired Enbala/PWRcell)
+    "Generac",
+
     # Climate Risk & Wildfire
     "Pano AI",
 
@@ -97,7 +103,7 @@ FINTECH_AI_COMPANIES = [
     "Conga", "Vertafore", "DISH Network", "Dish Wireless", "Boom Supersonic",
 
     # Industrial AI
-    "Samsara", "Augury", "Sight Machine",
+    "Samsara", "Augury", "Sight Machine", "SparkCognition",
 
     # Infrastructure Software
     "Sitetracker", "Procore", "ServiceTitan",
@@ -124,6 +130,9 @@ FINTECH_AI_COMPANIES = [
 
     # Power Distribution Equipment
     "Trystar",
+
+    # T&E / Spend Management (same category as Engine)
+    "Navan",
 ]
 
 # All company names flattened (used for matching)
@@ -275,6 +284,8 @@ COMPANY_CAREER_URLS = {
     # --- Fintech Infrastructure ---
     "Stripe":               "https://stripe.com/jobs/search",
     "Plaid":                "https://jobs.lever.co/plaid",
+    "Ramp":                 "https://jobs.ashbyhq.com/ramp",                        # spend management (Ashby)
+    "Brex":                 "https://jobs.ashbyhq.com/brex",                        # spend management (Ashby)
     "Marqeta":              "https://job-boards.greenhouse.io/marqeta",              # fixed: was HTML
     "Modern Treasury":      "https://jobs.ashbyhq.com/modern-treasury",             # fixed: was HTML
 
@@ -289,6 +300,15 @@ COMPANY_CAREER_URLS = {
     "EcoVadis":             "https://job-boards.greenhouse.io/ecovadis",
     "Workiva":              "https://workiva.wd1.myworkdayjobs.com/Workiva",
     "Diligent":             "https://job-boards.greenhouse.io/diligent",
+
+    # --- Industrial Analytics ---
+    "Seeq":                 "https://apply.workable.com/seeq/",                     # industrial analytics / power & utilities (Workable)
+
+    # --- Industrial AI ---
+    "SparkCognition":       "https://jobs.ashbyhq.com/sparkcognition",              # industrial AI / energy (Ashby)
+
+    # --- T&E / Spend Management ---
+    "Navan":                "https://jobs.ashbyhq.com/navan",                       # travel & expense platform (Ashby)
 
     # --- Data Platform & Analytics ---
     "dbt Labs":             "https://job-boards.greenhouse.io/dbtlabs",
@@ -308,6 +328,12 @@ COMPANY_CAREER_URLS = {
     # Applied Companies — added from Steve's resume vault
     # Agent will continue monitoring these for new openings
     # ================================================================
+
+    # Enterprise AI (energy vertical)
+    "C3.ai":                "https://jobs.ashbyhq.com/c3-ai",                      # enterprise AI / utilities vertical (Ashby)
+
+    # Demand flexibility / measurement
+    "Recurve Analytics":    "https://jobs.ashbyhq.com/recurve",                    # demand flex measurement / DERMS (Ashby)
 
     # Energy market modeling & intelligence
     "Energy Exemplar":      "https://job-boards.greenhouse.io/energyexemplarllc",  # PLEXOS / Aurora software
