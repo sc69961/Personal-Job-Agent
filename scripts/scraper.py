@@ -381,6 +381,10 @@ def _detect_ats(url: str) -> tuple:
         return ("icims", url)
     if "jobvite.com" in url:
         return ("jobvite", url)
+    # SAP SuccessFactors custom-domain search pages (e.g. careers.landisgyr.com/search?q=...)
+    # Must come last — only matches URLs we deliberately set with the /search?q= pattern.
+    if "/search?q=" in url.lower():
+        return ("successfactors", url)
     return ("html", url)
 
 
@@ -847,6 +851,102 @@ def _scrape_jobvite(company: str, url: str) -> list:
         return []
 
 
+def _scrape_successfactors(company: str, url: str) -> list:
+    """
+    SAP SuccessFactors custom-domain career sites.
+    Companies like Landis+Gyr host their careers on a branded domain powered by SAP SF.
+    The /search?q= endpoint renders results as server-side HTML — no JS required.
+
+    URL pattern:  https://{domain}/search?q=product+manager
+    Pagination:   &startrow=25  (0-based, 25 results per page — scrape up to 3 pages)
+
+    Detection:    _detect_ats() matches URLs containing /search?q= that aren't caught
+                  by earlier ATS checks (workday, greenhouse, etc.).
+    """
+    from urllib.parse import urlparse, urljoin
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+    }
+    try:
+        parsed = urlparse(url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        # Normalise: ensure the URL has the PM keyword search term
+        if "/search" not in parsed.path.lower():
+            search_url = base + "/search?q=product+manager"
+        else:
+            search_url = url
+
+        jobs = []
+        seen = set()
+        for page in range(3):
+            page_url = search_url if page == 0 else f"{search_url}&startrow={page * 25}"
+            try:
+                resp = requests.get(page_url, headers=headers, timeout=25)
+                resp.raise_for_status()
+            except Exception as e:
+                logger.warning(f"{company} (SAP SF) page {page + 1} failed: {e}")
+                break
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # SAP SF renders jobs as table rows with <a href="/job/..."> title links.
+            # Try progressively broader selectors.
+            job_links = (
+                soup.select("a.jobTitle")
+                or soup.select("td.jobTitle a")
+                or soup.select(".jobTitle a")
+                or soup.select("a[href*='/job/']")
+            )
+            if not job_links:
+                break  # No results on this page — stop paginating
+
+            new_on_page = 0
+            for a in job_links:
+                title = a.get_text(strip=True)
+                if not title or len(title) < 5 or len(title) > 120:
+                    continue
+                if not _is_pm_role(title):
+                    continue
+                href = a.get("href", "")
+                if href.startswith("/"):
+                    href = base + href
+                elif not href.startswith("http"):
+                    continue
+                if href in seen:
+                    continue
+                seen.add(href)
+                new_on_page += 1
+
+                # Location: look in an adjacent <td> or nearby span/div
+                location = "See listing"
+                row = a.find_parent("tr") or a.find_parent("li") or a.find_parent("div")
+                if row:
+                    loc_el = (
+                        row.find(class_=lambda c: c and "location" in (c or "").lower())
+                        or row.find("td", class_=lambda c: c and "location" in (c or "").lower())
+                        or row.find(class_=lambda c: c and "jobLocation" in (c or ""))
+                    )
+                    if loc_el:
+                        location = loc_el.get_text(strip=True)
+
+                jobs.append(make_job(
+                    title=title, company=company, location=location,
+                    url=href, description="", source="company_site",
+                ))
+
+            if new_on_page == 0:
+                break  # Page contributed nothing new — stop
+
+        logger.info(f"{company} (SAP SF): {len(jobs)} PM roles")
+        return jobs
+    except Exception as e:
+        logger.error(f"{company} SAP SF scrape failed: {e}")
+        return []
+
+
 def _scrape_html_careers(company: str, url: str) -> list:
     """Generic HTML scraper — finds links whose text matches PM keywords."""
     from urllib.parse import urlparse
@@ -985,6 +1085,8 @@ def scrape_company_sites(max_jobs: int = 200) -> list:
                 batch = _scrape_icims(company, slug_or_url)
             elif ats_type == "jobvite":
                 batch = _scrape_jobvite(company, slug_or_url)
+            elif ats_type == "successfactors":
+                batch = _scrape_successfactors(company, slug_or_url)
             else:
                 batch = _scrape_html_careers(company, slug_or_url)
             all_jobs.extend(batch)
@@ -1008,59 +1110,96 @@ CLIMATE_JOB_BOARDS = [
     ("ClimatePeople",    "https://www.climatepeople.com/jobs"),
     ("ClimateDraft",     "https://jobs.climatedraft.org/jobs"),
     ("Terra.do",         "https://www.terra.do/climate-jobs/job-board/"),
+    # Wellfound: /role/r/product-manager pre-filters to PM titles — server-side HTML,
+    # page 1 returns ~20 PM roles sorted by recency. No JS required.
+    ("Wellfound",        "https://wellfound.com/role/r/product-manager"),
+    # Built In Colorado: tech jobs in Denver/Boulder ecosystem.
+    # category=Product is broad (designers, analysts, PMs) — _is_pm_role() filters down.
+    # Server-side rendered HTML, no JS required.
+    ("Built In CO",      "https://www.builtincolorado.com/jobs?category=Product"),
 ]
 
 def scrape_climate_boards(max_jobs: int = 100) -> list:
-    """Scrape climate-focused job aggregator boards for PM roles."""
+    """Scrape climate-focused job aggregator boards for PM roles.
+
+    Boards listed in PAGINATED_BOARDS get multi-page scraping (?page=N).
+    All others are single-page. The _is_pm_role() filter applies everywhere.
+    """
     from urllib.parse import urlparse
+
+    # Boards that paginate via ?page=N — (name, max_pages)
+    PAGINATED_BOARDS = {
+        "Wellfound": 3,    # PM-filtered URL; page 1 ~20 roles, 3 pages = ~60
+        "Built In CO": 5,  # Product category is broad; scrape more pages to find PM roles
+    }
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
     all_jobs = []
+
     for board_name, board_url in CLIMATE_JOB_BOARDS:
         try:
-            time.sleep(2)
-            resp = requests.get(board_url, headers=headers, timeout=20)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
             parsed = urlparse(board_url)
             base = f"{parsed.scheme}://{parsed.netloc}"
             seen = set()
             board_jobs = []
-            for a in soup.find_all("a", href=True):
-                title = a.get_text(strip=True)
-                if not title or len(title) < 5 or len(title) > 120:
-                    continue
-                if not _is_pm_role(title):
-                    continue
-                href = a["href"]
-                if href.startswith("/"):
-                    href = base + href
-                elif not href.startswith("http"):
-                    continue
-                if href in seen:
-                    continue
-                seen.add(href)
-                # Try to find company name near the link
-                parent = a.find_parent()
-                company = ""
-                if parent:
-                    siblings = parent.find_all(string=True)
-                    text_bits = [s.strip() for s in siblings if s.strip() and s.strip() != title]
-                    company = text_bits[0] if text_bits else board_name
-                board_jobs.append(make_job(
-                    title=title, company=company or board_name,
-                    location="See listing", url=href,
-                    description="", source=board_name.lower().replace(".", "_"),
-                ))
+            max_pages = PAGINATED_BOARDS.get(board_name, 1)
+
+            for page in range(1, max_pages + 1):
+                time.sleep(2)
+                page_url = board_url if page == 1 else f"{board_url}&page={page}"
+                try:
+                    resp = requests.get(page_url, headers=headers, timeout=20)
+                    resp.raise_for_status()
+                except Exception as e:
+                    logger.warning(f"{board_name} page {page} fetch failed: {e}")
+                    break
+                soup = BeautifulSoup(resp.text, "html.parser")
+
+                new_on_page = 0
+                for a in soup.find_all("a", href=True):
+                    title = a.get_text(strip=True)
+                    if not title or len(title) < 5 or len(title) > 120:
+                        continue
+                    if not _is_pm_role(title):
+                        continue
+                    href = a["href"]
+                    if href.startswith("/"):
+                        href = base + href
+                    elif not href.startswith("http"):
+                        continue
+                    if href in seen:
+                        continue
+                    seen.add(href)
+                    new_on_page += 1
+
+                    # Try to find company name near the link
+                    parent = a.find_parent()
+                    company = ""
+                    if parent:
+                        siblings = parent.find_all(string=True)
+                        text_bits = [s.strip() for s in siblings if s.strip() and s.strip() != title]
+                        company = text_bits[0] if text_bits else board_name
+                    board_jobs.append(make_job(
+                        title=title, company=company or board_name,
+                        location="See listing", url=href,
+                        description="", source=board_name.lower().replace(" ", "_").replace(".", "_"),
+                    ))
+
+                if new_on_page == 0 and page > 1:
+                    break  # No new results on this page — stop paginating
+
             logger.info(f"{board_name}: {len(board_jobs)} PM roles found")
             all_jobs.extend(board_jobs)
         except Exception as e:
             logger.error(f"{board_name} scrape failed: {e}")
+
     return all_jobs
 
 
