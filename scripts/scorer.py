@@ -77,6 +77,10 @@ _REMOTE_SIGNALS = [
 _USA_GENERIC = [
     "united states", "usa", "u.s.a", "u.s.", "nationwide", "us only",
     "anywhere", "multiple locations", "various locations",
+    # Our placeholder for job-board links (Wellfound, ClimateDraft, etc.) where
+    # we scrape the listing URL but don't fetch the full JD location field.
+    # Treat as unknown → let Claude evaluate from the job description.
+    "see listing",
 ]
 
 # Cities/areas within ~30 miles of Denver
