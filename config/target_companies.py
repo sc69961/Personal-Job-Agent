@@ -68,6 +68,15 @@ CLIMATETECH_COMPANIES = [
     # Home Energy Management (acquired Enbala/PWRcell)
     "Generac",
 
+    # Nuclear (fusion, fission, microreactors)
+    "Helion", "Radiant Industries", "Oklo", "The Nuclear Company",
+
+    # Climate data / earth observation satellites
+    "Muon Space", "Planet Labs",
+
+    # Energy storage
+    "ON.energy",
+
     # Climate Risk & Wildfire
     "Pano AI",
 
@@ -206,6 +215,19 @@ COMPANY_CAREER_URLS = {
     "ChargePoint":          "https://job-boards.greenhouse.io/chargepoint",
     "Form Energy":          "https://jobs.ashbyhq.com/formenergy",
     "Euclid Power":         "https://jobs.ashbyhq.com/euclid-power",
+
+    # --- Nuclear (fusion, fission, microreactors) ---
+    "Helion":               "https://jobs.ashbyhq.com/helion",                # nuclear fusion
+    "Radiant Industries":   "https://jobs.ashbyhq.com/radiant-industries",    # nuclear microreactor
+    "Oklo":                 "https://job-boards.greenhouse.io/oklo",           # advanced fission
+    "The Nuclear Company":  "https://job-boards.greenhouse.io/thenuclearcompany",
+
+    # --- Climate data / earth observation ---
+    "Muon Space":           "https://job-boards.greenhouse.io/muonspace",      # climate satellites
+    "Planet Labs":          "https://job-boards.greenhouse.io/planetlabs",     # earth observation
+
+    # --- Energy storage ---
+    "ON.energy":            "https://job-boards.greenhouse.io/onenergy",
 
     # --- Recommended additions based on profile ---
     "SPAN":                 "https://jobs.ashbyhq.com/span",                        # fixed: was HTML

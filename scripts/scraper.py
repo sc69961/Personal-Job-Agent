@@ -1217,6 +1217,90 @@ def scrape_custom_feeds(max_jobs: int = 30) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Lynceus PM board scraper
+# ---------------------------------------------------------------------------
+
+def scrape_lynceus_board(max_jobs: int = 300) -> list:
+    """Parse the Lynceus product board from their public GitHub repo.
+
+    Source:  https://raw.githubusercontent.com/trylynceus/jobs/main/boards/product.md
+    Format:  Markdown table — | Role | Company | Location | Posted |
+    Updated: daily at ~04:15 UTC; shows the 300 most recent PM-category roles
+             scraped directly from 8,000+ company career pages.
+
+    Locations in the table vary ("Remote", "United States", city names).
+    The "See listing" fallback is used only when the location column is empty.
+    """
+    import re
+
+    url = "https://raw.githubusercontent.com/trylynceus/jobs/main/boards/product.md"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/plain,text/html,*/*",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=20)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.error(f"Lynceus board fetch failed: {e}")
+        return []
+
+    jobs = []
+    seen_urls: set = set()
+
+    for line in resp.text.splitlines():
+        line = line.strip()
+        # Only parse table data rows — skip header, separator, comment, empty lines
+        if not line.startswith("|"):
+            continue
+        if "| Role" in line or "|---" in line or "| ---" in line:
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        # Expected: ['', role_cell, company_cell, location_cell, posted_cell, '']
+        if len(parts) < 5:
+            continue
+
+        role_cell     = parts[1]
+        company_cell  = parts[2]
+        location_cell = parts[3]
+
+        # Extract title and ATS URL from markdown link: [Title](URL)
+        role_match = re.match(r'\[([^\]]+)\]\(([^)]+)\)', role_cell)
+        if not role_match:
+            continue
+        title   = role_match.group(1).strip()
+        job_url = role_match.group(2).strip()
+
+        # Strip any markdown link syntax from company cell
+        co_match = re.match(r'\[([^\]]+)\]\([^)]+\)', company_cell)
+        company = co_match.group(1).strip() if co_match else company_cell.strip()
+
+        location = location_cell.strip() or "See listing"
+
+        if not _is_pm_role(title):
+            continue
+        if job_url in seen_urls:
+            continue
+        seen_urls.add(job_url)
+
+        jobs.append(make_job(
+            title=title,
+            company=company,
+            location=location,
+            url=job_url,
+            description="",
+            source="lynceus",
+        ))
+        if len(jobs) >= max_jobs:
+            break
+
+    logger.info(f"Lynceus: {len(jobs)} PM roles parsed")
+    return jobs
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -1225,7 +1309,7 @@ def scrape_all(max_per_source: int = 50) -> list[dict]:
     all_jobs = []
     seen = set()
 
-    for fetch_fn in [scrape_climatebase, scrape_linkedin, scrape_company_sites, scrape_climate_boards, scrape_custom_feeds]:
+    for fetch_fn in [scrape_climatebase, scrape_linkedin, scrape_company_sites, scrape_climate_boards, scrape_lynceus_board, scrape_custom_feeds]:
         try:
             batch = fetch_fn(max_jobs=max_per_source)
             for job in batch:
