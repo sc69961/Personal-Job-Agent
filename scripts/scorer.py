@@ -40,7 +40,10 @@ _JUNIOR_SIGNALS = [
 ]
 
 _ONSITE_SIGNALS = [
-    "on-site only", "onsite only", "in-office only", "must be located in",
+    "on-site only", "onsite only", "in-office only",
+    # Removed "must be located in" — too broad; also matches
+    # "must be located in the United States" (a US-remote requirement, not on-site)
+    "must be on-site", "required to work on-site", "required to be on-site",
     "new york only", "san francisco only", "seattle only", "chicago only",
     "austin only", "no remote",
 ]
@@ -71,6 +74,12 @@ _INTERNATIONAL_SIGNALS = [
 _REMOTE_SIGNALS = [
     "remote", "hybrid", "work from home", "wfh", "distributed",
     "anywhere in the us", "anywhere in us", "flexible location",
+    # Additional remote signal synonyms companies actually use
+    "remote-first", "remote first", "fully remote", "100% remote",
+    "remote eligible", "remote ok", "open to remote",
+    "work from anywhere", "flexible work", "location flexible",
+    "remote / us", "remote (us", "us remote", "remote us",
+    "remote, us", "remote - us", "us, remote",
 ]
 
 # Generic US / no-location signals — pass through (let Claude score)
@@ -81,6 +90,14 @@ _USA_GENERIC = [
     # we scrape the listing URL but don't fetch the full JD location field.
     # Treat as unknown → let Claude evaluate from the job description.
     "see listing",
+    # Additional generic US patterns companies use in ATS location fields
+    "north america",  # US-eligible roles often posted as "North America"
+    "u.s",            # catches "U.S" without trailing period
+    "flexible",       # ATS placeholder meaning location-flexible
+    "remote, us",     # common ATS format — normalized variant of "remote"
+    "remote - us",
+    "us, remote",
+    "remote (us",     # catches "Remote (US)", "Remote (US only)", etc.
 ]
 
 # Cities/areas within ~30 miles of Denver
@@ -130,10 +147,20 @@ def pre_filter(job: dict, config: dict) -> tuple:
     has_remote  = any(sig in desc for sig in _REMOTE_SIGNALS)
     is_generic  = not location or any(sig in location for sig in _USA_GENERIC)
     is_denver   = any(sig in location for sig in _DENVER_METRO)
+    # Board-scraped jobs (Lynceus, Wellfound, climate boards) arrive with no description —
+    # only the ATS URL.  The company may list its HQ city even for remote roles, and we
+    # have no JD text to check for remote signals.  Pass these to Claude: it can determine
+    # location eligibility from the full job description it fetches at scoring time.
+    no_desc     = len(job.get("description", "").strip()) < 100
 
     if not has_remote and not is_generic and not is_denver:
-        # Has a specific US location that isn't Denver-adjacent and isn't remote
-        return False, f"on-site, not in Denver metro: {location.strip()}"
+        if no_desc:
+            # No description to evaluate — don't hard-drop based on city name alone.
+            # Claude will score it and can reject for location if truly on-site.
+            pass
+        else:
+            # We have a description and still found no remote signal → drop it.
+            return False, f"on-site, not in Denver metro: {location.strip()}"
 
     # 3. Legacy description-based onsite check (catches "onsite only" in JD text)
     if any(sig in desc for sig in _ONSITE_SIGNALS):
