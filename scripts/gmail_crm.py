@@ -24,17 +24,32 @@ CRM_PATH = "./output/crm.json"
 GMAIL_SEARCH_QUERIES = [
     # Emails we sent that look like applications
     'from:me subject:(application OR "cover letter" OR resume OR "applied for") newer_than:120d',
-    # ATS auto-confirmations — keep to catch applications Steve submitted
-    # without sending a manual email (e.g. LinkedIn Easy Apply, direct ATS form)
-    # Claude classifies these as 'applied', not 'response_received'
+
+    # ATS auto-confirmations — broad subject patterns
+    # "thank you for applying" / "application received" / "we received your application"
     'subject:("thank you for applying" OR "application received" OR "we received your application") newer_than:120d',
+    # Ashby format: "Your application to [Company]"
+    # Greenhouse format: "Application for [Role] at [Company]" / "Application submitted"
+    'subject:("your application to" OR "application for" OR "application submitted" OR "application confirmation") newer_than:120d',
+    # Workday / misc ATS formats
+    'subject:("thanks for applying" OR "thanks for your application" OR "we got your application" OR "we have received your application") newer_than:120d',
+
+    # ATS sender domains — catches any email from known ATS platforms regardless of subject.
+    # Most reliable signal: if it's from greenhouse.io, ashbyhq.com, etc. it's job-related.
+    'from:(greenhouse.io OR ashbyhq.com) newer_than:120d',
+    'from:(lever.co OR myworkdayjobs.com OR workday.com) newer_than:120d',
+    'from:(icims.com OR smartrecruiters.com OR workable.com OR jobvite.com) newer_than:120d',
+    'from:(recruiting.facebook.com OR linkedin.com) subject:(application OR applied OR interview OR offer) newer_than:120d',
+
     # Interview requests
     'subject:(interview OR "next steps" OR "move forward" OR "schedule a call" OR "chat with") newer_than:120d',
+
     # Rejections — subject line signals
     'subject:("unfortunately" OR "not moving forward" OR "decided to" OR "other candidates" OR "position has been filled") newer_than:120d',
     # Rejections — body text signals (catches polite rejections that arrive as replies)
     '("not to advance" OR "not moving forward" OR "decided not to move" OR "not selected" OR "moving in a different direction" OR "not advance you" OR "not be moving forward") newer_than:120d',
     '("after careful deliberation" OR "after careful consideration" OR "we have decided" OR "difficult decision" OR "not the right fit") newer_than:120d',
+
     # Offers — require stronger signals than just "offer" (too many false positives)
     'subject:("offer letter" OR "job offer" OR "pleased to offer" OR "excited to offer you" OR "formal offer") newer_than:120d',
     '("we would like to offer you" OR "offer letter attached" OR "contingent offer" OR "total compensation" OR "start date") newer_than:120d',
