@@ -802,6 +802,27 @@ def sync_gmail_crm(config: dict) -> dict:
     # Sort by last_activity descending
     crm["applications"].sort(key=lambda a: a.get("last_activity", ""), reverse=True)
     save_crm(crm)
+
+    # ── Vault sync: auto-confirm applications that have a resume file ──────────
+    # This is the permanent fix for recurring needs_review flags. Every resume file
+    # in the Obsidian vault is proof that Steve applied to that company. Matching
+    # CRM entries get user_confirmed=True so they never re-flag on future syncs.
+    try:
+        import importlib.util, pathlib
+        vault_sync_path = pathlib.Path(__file__).parent.parent / "vault_sync_crm.py"
+        spec = importlib.util.spec_from_file_location("vault_sync_crm", vault_sync_path)
+        vs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vs)
+        vault_confirmed = vs.vault_sync(upload_to_s3=False, verbose=False)
+        if vault_confirmed:
+            logger.info(f"  → Vault sync: auto-confirmed {vault_confirmed} applications from resume vault")
+            # Reload crm after vault_sync saved it
+            with open(CRM_PATH) as _f:
+                crm = json.load(_f)
+            needs_review_count = sum(1 for a in crm.get("applications", []) if a.get("needs_review") and not a.get("user_confirmed"))
+    except Exception as _e:
+        logger.debug(f"Vault sync skipped: {_e}")
+
     review_note = f", {needs_review_count} need review ⚠" if needs_review_count else ""
     logger.info(f"CRM sync complete — {processed} new threads, {len(crm['applications'])} total applications{review_note}")
     return crm
