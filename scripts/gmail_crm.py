@@ -100,11 +100,20 @@ def _app_id(company: str, job_title: str) -> str:
     return hashlib.md5(f"{norm_co}_{norm_title}".encode()).hexdigest()[:10]
 
 
-def _find_existing_by_company(company: str, app_by_id: dict) -> Optional[dict]:
+def _find_existing_by_company(
+    company: str,
+    app_by_id: dict,
+    job_title: str = "",
+) -> Optional[dict]:
     """
     Find an existing CRM entry by normalized company name match.
     Used to catch status updates that arrive in separate email threads.
     Returns the best matching entry, or None.
+
+    When multiple entries exist for the same company (multi-role applications),
+    we try to match on job title first. If no title match is found and there are
+    multiple candidates, we return None so a new entry is created rather than
+    silently merging the wrong roles together.
     """
     norm = _normalize_company(company)
     if not norm:
@@ -116,10 +125,22 @@ def _find_existing_by_company(company: str, app_by_id: dict) -> Optional[dict]:
             candidates.append(app)
     if not candidates:
         return None
-    # Prefer the entry with the highest-priority status
-    def status_rank(a):
-        return STATUS_PRIORITY.index(a.get("status", "applied")) if a.get("status") in STATUS_PRIORITY else 0
-    return sorted(candidates, key=status_rank, reverse=True)[0]
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Multiple entries at this company — try to match on job title
+    if job_title:
+        title_norm = _normalize_company(job_title)  # reuse normalizer for title
+        for app in candidates:
+            existing_title = _normalize_company(app.get("job_title", ""))
+            if existing_title and title_norm and (
+                existing_title in title_norm or title_norm in existing_title
+            ):
+                return app
+
+    # Multiple entries but no title match — return None so a new entry is
+    # created rather than merging into the wrong existing role.
+    return None
 
 
 def _should_upgrade_status(current: str, new: str) -> bool:
@@ -702,9 +723,9 @@ def sync_gmail_crm(config: dict) -> dict:
                     aid = _app_id(company, job_title)
                     app = app_by_id.get(aid)
 
-                # 4. Company-name-only fallback
+                # 4. Company-name-only fallback (title-aware when multiple entries exist)
                 if not app:
-                    app = _find_existing_by_company(company, app_by_id)
+                    app = _find_existing_by_company(company, app_by_id, job_title=job_title)
 
                 if app:
                     # Merge sender domains into the matched entry so future
