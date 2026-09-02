@@ -131,6 +131,26 @@ def extract_vault_companies(vault_dir: Path) -> set[str]:
     return companies
 
 
+def extract_vault_resume_counts(vault_dir: Path) -> dict[str, int]:
+    """Return {canonical_company: count_of_resume_files} for multi-role detection."""
+    counts: dict[str, int] = {}
+    if not vault_dir.exists():
+        return counts
+    for f in vault_dir.iterdir():
+        if not f.is_file():
+            continue
+        m = _RESUME_RE.match(f.name)
+        if not m:
+            continue
+        suffix = m.group(1)
+        canonical = COMPANY_ALIASES.get(suffix)
+        if canonical is None and suffix not in COMPANY_ALIASES:
+            canonical = suffix  # no alias → use raw suffix
+        if canonical:
+            counts[canonical] = counts.get(canonical, 0) + 1
+    return counts
+
+
 def normalize_crm_company(name: str) -> str:
     """Lowercase + strip punctuation for fuzzy matching."""
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
@@ -156,6 +176,7 @@ def vault_sync(
 
     apps = crm.get("applications", [])
     vault_companies = extract_vault_companies(vault_dir)
+    resume_counts   = extract_vault_resume_counts(vault_dir)
 
     if verbose:
         print(f"Vault: {len(vault_companies)} distinct companies confirmed")
@@ -164,6 +185,13 @@ def vault_sync(
     vault_normalized: dict[str, str] = {
         normalize_crm_company(c): c for c in vault_companies
     }
+
+    # Count CRM entries per company
+    crm_counts: dict[str, int] = {}
+    for app in apps:
+        co = normalize_crm_company(app.get("company", ""))
+        if co:
+            crm_counts[co] = crm_counts.get(co, 0) + 1
 
     newly_confirmed = 0
     for app in apps:
@@ -180,6 +208,19 @@ def vault_sync(
             newly_confirmed += 1
             if verbose:
                 print(f"  ✅ Auto-confirmed: {co} (resume found in vault)")
+
+    # Warn when vault has more resumes than CRM entries for a company
+    # (signals a missing CRM entry — a role applied to that Gmail never caught)
+    if verbose:
+        for canonical, count in sorted(resume_counts.items()):
+            if count <= 1:
+                continue
+            co_norm = normalize_crm_company(canonical)
+            crm_entry_count = crm_counts.get(co_norm, 0)
+            if crm_entry_count < count:
+                print(f"  ⚠  {canonical}: {count} resume files in vault but only "
+                      f"{crm_entry_count} CRM entr{'y' if crm_entry_count == 1 else 'ies'} "
+                      f"— possible missing application")
 
     if verbose:
         print(f"\nvault_sync complete: {newly_confirmed} new confirmations")
