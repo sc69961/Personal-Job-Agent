@@ -2,8 +2,8 @@ name: CRM Sync — Gmail Status Update
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 8am MT daily
-    - cron: '0 22 * * *'   # 4pm MT daily
+    - cron: '0 15 * * *'   # 9am MT (MDT=UTC-6) — after job agent email arrives
+    - cron: '0 20 * * *'   # 2pm MT daily — midday catch
   workflow_dispatch:
 
 # CONCURRENCY GUARD
