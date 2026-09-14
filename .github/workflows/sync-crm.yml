@@ -82,8 +82,8 @@ jobs:
       - name: Persist data files to repo
         run: |
           bash scripts/git_safe_push.sh \
-            "output/first_seen_registry.json" \
-            "chore: update first_seen registry [skip ci]"
+            "output/first_seen_registry.json output/crm.json" \
+            "chore: update first_seen + crm [skip ci]"
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools

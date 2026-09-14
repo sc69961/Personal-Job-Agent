@@ -68,13 +68,49 @@ GHOST_AFTER_DAYS = 30
 _GENERIC_DOMAINS = {
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com",
     "me.com", "aol.com", "protonmail.com", "live.com", "msn.com",
-    # ATS / recruiting platforms — not company domains
-    "greenhouse.io", "lever.co", "ashbyhq.com", "workday.com",
-    "myworkdayjobs.com", "icims.com", "taleo.net", "successfactors.com",
-    "smartrecruiters.com", "jobvite.com", "brassring.com", "kenexa.com",
-    "recruitee.com", "bamboohr.com", "rippling.com", "workable.com",
-    "linkedin.com", "indeed.com", "glassdoor.com",
+    # ATS / recruiting platforms — not company domains.
+    # These serve HUNDREDS of companies — matching on them causes cross-company
+    # misattribution (e.g. Voltus emails hitting Omnidian via shared hire.lever.co).
+    # Listed as root domains; the filter checks both exact match and subdomain suffix.
+    "greenhouse.io",       # boards.greenhouse.io, job-boards.greenhouse.io
+    "lever.co",            # hire.lever.co, no-reply.lever.co
+    "ashbyhq.com",         # jobs.ashbyhq.com
+    "workday.com",         # wd1.myworkdayjobs.com, wd5.myworkdayjobs.com
+    "myworkdayjobs.com",
+    "workablemail.com",    # candidates.workablemail.com
+    "workable.com",
+    "icims.com",           # client.icims.com
+    "taleo.net",
+    "successfactors.com",
+    "smartrecruiters.com",
+    "jobvite.com",         # hire.jobvite.com
+    "brassring.com",
+    "kenexa.com",
+    "recruitee.com",
+    "bamboohr.com",
+    "rippling.com",
+    "salesforce.com",      # used by some Workday/ATS integrations
+    "linkedin.com",
+    "indeed.com",
+    "glassdoor.com",
+    "hire.com",
+    "applytojob.com",
+    "recruitingbypaycor.com",
+    "paylocity.com",
+    "adp.com",
 }
+
+def _is_generic_domain(domain: str) -> bool:
+    """Return True if domain is a known multi-company ATS/email domain.
+    Checks both exact match and subdomain suffix (e.g. hire.lever.co → lever.co).
+    """
+    if domain in _GENERIC_DOMAINS:
+        return True
+    # Check if domain ends with any generic root (catches subdomains)
+    for generic in _GENERIC_DOMAINS:
+        if domain.endswith("." + generic):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +205,7 @@ def _extract_sender_domains(messages: list) -> set:
         match = re.search(r'[\w.+-]+@([\w.-]+\.[a-zA-Z]{2,})', from_header)
         if match:
             domain = match.group(1).lower()
-            if domain not in _GENERIC_DOMAINS:
+            if not _is_generic_domain(domain):
                 domains.add(domain)
     return domains
 
@@ -178,10 +214,17 @@ def _build_domain_map(app_by_id: dict) -> dict:
     """
     Build {email_domain: [app_id, ...]} from domains already stored on CRM entries.
     Used to match new threads to existing applications by recruiter email domain.
+
+    Filters out generic ATS/email domains even if they were stored in older CRM
+    entries before the blacklist was expanded (e.g. hire.lever.co, boards.greenhouse.io).
+    This prevents cross-company misattribution when ATS platforms reuse the same
+    sender domain for hundreds of different company notifications.
     """
     domain_map: dict = {}
     for app_id, app in app_by_id.items():
         for domain in app.get("sender_domains", []):
+            if _is_generic_domain(domain):
+                continue  # skip stale ATS domains in old entries
             domain_map.setdefault(domain, []).append(app_id)
     return domain_map
 

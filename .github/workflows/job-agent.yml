@@ -114,7 +114,7 @@ jobs:
         if: always()
         run: |
           bash scripts/git_safe_push.sh \
-            "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json output/seen_job_ids.json" \
+            "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json output/seen_job_ids.json output/crm.json" \
             "chore: update job agent data [skip ci]"
 
       # Send morning job review email (new 65+ scored roles, not yet applied).
