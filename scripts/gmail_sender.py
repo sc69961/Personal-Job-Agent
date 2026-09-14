@@ -1,7 +1,10 @@
 """
-gmail_sender.py — Sends a daily digest email via Gmail SMTP (App Password).
+gmail_sender.py — Sends a daily job review email via Gmail SMTP (App Password).
 No OAuth required — uses a Gmail App Password that never expires.
 Generate one at: myaccount.google.com/apppasswords
+
+Shows only NEW jobs (first_seen within LOOKBACK_DAYS) that Steve has NOT yet
+applied to. All 40+ scored jobs are included — no arbitrary top-N cap.
 """
 
 import os
@@ -9,9 +12,48 @@ import smtplib
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timedelta
+
+LOOKBACK_DAYS = 7   # only jobs first seen in the last 7 days
+ACTIVE_STATUSES = {"applied", "interview_requested", "response_received", "offer"}
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# CRM filtering — exclude jobs already applied to
+# ---------------------------------------------------------------------------
+
+def _build_applied_set(crm: dict) -> set:
+    """Return (company_lower, title_lower_prefix) pairs for active CRM entries."""
+    applied = set()
+    for app in (crm or {}).get("applications", []):
+        if app.get("status") in ACTIVE_STATUSES:
+            co    = (app.get("company") or "").lower().strip()
+            title = (app.get("job_title") or "").lower().strip()[:40]
+            applied.add((co, title))
+            applied.add((co, ""))   # company-only fallback
+    return applied
+
+def _is_applied(job: dict, applied_set: set) -> bool:
+    co    = (job.get("company") or "").lower().strip()
+    title = (job.get("title") or "").lower().strip()[:40]
+    return (co, title) in applied_set or (co, "") in applied_set
+
+def _is_new(job: dict, lookback_days: int = LOOKBACK_DAYS) -> bool:
+    first_seen = job.get("first_seen", "")
+    if not first_seen:
+        return True  # no date recorded → include it
+    cutoff = (datetime.now() - timedelta(days=lookback_days)).isoformat()
+    return first_seen >= cutoff
+
+def filter_email_jobs(jobs: list, crm: dict) -> list:
+    """Return jobs that are new (within LOOKBACK_DAYS) and not yet applied to."""
+    applied_set = _build_applied_set(crm)
+    filtered = [j for j in jobs if _is_new(j) and not _is_applied(j, applied_set)]
+    filtered.sort(key=lambda j: j.get("score", 0), reverse=True)
+    return filtered
+
 
 SCORE_COLOR = {
     "strong yes": ("#1a7a3a", "#d4f0df"),   # dark green text, light green bg
@@ -173,9 +215,9 @@ def build_digest_html(jobs: list[dict], run_date: str, total_scraped: int, crm: 
 
     <!-- Header -->
     <div style="background:#1a3a5c;padding:24px 28px;border-radius:8px 8px 0 0;">
-      <h1 style="color:#fff;margin:0;font-size:20px;">🎯 Job Digest — {run_date}</h1>
+      <h1 style="color:#fff;margin:0;font-size:20px;">☀️ Job Review — {run_date}</h1>
       <p style="color:#a8c4dc;margin:6px 0 0;font-size:13px;">
-        {total_scraped} jobs scraped · {len(jobs)} above fit threshold · sorted by score
+        {total_scraped} jobs scraped · {len(jobs)} new opportunities (score 40+, not yet applied) · sorted by score
       </p>
     </div>
 
@@ -215,12 +257,18 @@ def send_digest(
         return False
 
     run_date = datetime.now().strftime("%b %-d, %Y")
-    top_jobs = jobs[:config.get("TOP_N_FOR_EMAIL", 10)]
 
-    html_body = build_digest_html(top_jobs, run_date, total_scraped, crm=crm)
+    # Filter: new jobs (last 7 days) that Steve hasn't applied to yet
+    email_jobs = filter_email_jobs(jobs, crm or {})
+
+    if not email_jobs:
+        logger.info("No new unapplied 40+ jobs to surface — skipping email.")
+        return False
+
+    html_body = build_digest_html(email_jobs, run_date, total_scraped, crm=crm)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🎯 Job Digest {run_date} — Top {len(top_jobs)} matches"
+    msg["Subject"] = f"☀️ Job Review — {run_date} ({len(email_jobs)} new opportunities)"
     msg["From"]    = config["GMAIL_SENDER"]
     msg["To"]      = config["DIGEST_EMAIL_TO"]
     msg.attach(MIMEText(html_body, "html"))
