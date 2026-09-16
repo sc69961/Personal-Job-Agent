@@ -170,7 +170,7 @@ COMPANY_CAREER_URLS = {
     "Pivot":                "https://www.pivotenergy.net/careers",
     "Base Power":           "https://jobs.ashbyhq.com/base-power",                  # fixed: was HTML
     "LineVision":           "https://jobs.ashbyhq.com/linevision",                  # fixed: was HTML
-    "Sunrun":               "https://careers.sunrun.com/search-jobs/product%20manager/Colorado%2C%20US/21632/1/3/6252001-5417618/39x00027/-105x50083/50/2",
+    "Sunrun":               "https://careers.sunrun.com/search-jobs/product%20manager/United%20States/21632/1/2/6252001/37x09024/-95x71289/3000/2",
     "Syso":                 "https://www.sysotechnologies.com/join/",
     "Arcadia":              "https://job-boards.greenhouse.io/arcadiacareers",        # FIX: was jobs.lever.co/arcadia (arcadia.io = healthcare data, WRONG company); arcadiacareers = arcadia.com (clean energy / community solar)
     "UtilityAPI":           "https://job-boards.greenhouse.io/utilityapi",
