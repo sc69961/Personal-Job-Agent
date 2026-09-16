@@ -35,8 +35,13 @@ S3_FILES = [
 # Files that are ALWAYS downloaded from S3, even if a local copy exists.
 # The Google token is refreshed each run and must be persisted to S3 so that
 # a GitHub Actions cache miss doesn't fall back to the stale Secret version.
+# crm.json is force-restored so that the repo checkout (which may be stale)
+# never silently overwrites the authoritative S3 version — without this, a run
+# that checks out an old crm.json and finds the file present would skip the S3
+# download and then upload the stale copy back, erasing days of CRM updates.
 S3_FORCE_RESTORE = [
     "config/google_token.pickle",
+    "output/crm.json",
 ]
 
 
@@ -54,11 +59,16 @@ def _is_configured(config: dict) -> bool:
 
 def _client(config: dict):
     import boto3
+    from botocore.config import Config as _BotoConfig
+    # Short timeouts + no retries: in sandboxed/offline environments without
+    # network access to AWS, fail fast instead of hanging on retry backoff.
+    fast_fail = _BotoConfig(connect_timeout=4, read_timeout=4, retries={"max_attempts": 1})
     return boto3.client(
         "s3",
         region_name=config.get("AWS_REGION", "us-east-2"),
         aws_access_key_id=config.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_ACCESS_KEY_ID", ""),
         aws_secret_access_key=config.get("AWS_SECRET_ACCESS_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+        config=fast_fail,
     )
 
 

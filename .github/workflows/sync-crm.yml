@@ -53,9 +53,15 @@ jobs:
           restore-keys: |
             job-agent-state-
 
+      # Only decode from Secret if the token file is truly absent.
+      # cache-hit is 'false' even on a restore-keys partial match (different run_id),
+      # so we check file existence rather than cache-hit to avoid overwriting a
+      # freshly-cached token with the stale Secret on every run.
       - name: Decode Google OAuth token (cache miss fallback)
-        if: steps.restore-state.outputs.cache-hit != 'true'
-        run: echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
+        run: |
+          if [ ! -f config/google_token.pickle ]; then
+            echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
+          fi
 
       - name: Sync Gmail CRM only
         env:
