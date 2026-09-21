@@ -22,7 +22,7 @@ CLIMATETECH_COMPANIES = [
     "Swell Energy", "Enphase", "SolarEdge", "Freewire Technologies", "Wallbox",
     "ChargePoint", "EVgo", "Blink Charging", "Nuvve", "Fermata Energy",
     "Lunar Energy", "Elephant Energy", "GoodLeap", "SB Energy",
-    "BoxPower", "Anza Renewables", "Bloom Energy", "Xpansiv",
+    "BoxPower", "Scale Microgrids", "Anza Renewables", "Bloom Energy", "Xpansiv",
     "OptiWatt", "ev.energy", "Pivot", "Renew Home",
 
     # Utilities / grid software / data
@@ -161,6 +161,7 @@ COMPANY_CAREER_URLS = {
     "Kraken":               "https://jobs.lever.co/kraken",                         # fixed: was wrong slug (kraken123)
     "Octopus Energy":       "https://octopus.energy/careers/join-us/",
     "BoxPower":             "https://boxpower.bamboohr.com/careers",
+    "Scale Microgrids":     "https://jobs.lever.co/ScaleMicrogridSolutions",
     "Weavegrid":            "https://jobs.ashbyhq.com/weavegrid",                   # fixed: was HTML
     "EnergyHub":            "https://job-boards.greenhouse.io/energyhub",           # fixed: was HTML
     "Renew Home":           "https://jobs.ashbyhq.com/renew-home",                  # fixed: was HTML
