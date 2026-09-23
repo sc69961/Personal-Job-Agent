@@ -145,7 +145,12 @@ jobs:
 
       - name: Deploy to Firebase
         if: always() && steps.skip_check.outputs.skip != 'true'
-        run: firebase deploy --only hosting:jobs --token "${{ secrets.FIREBASE_TOKEN }}" || true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
+        run: |
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" | base64 -d > /tmp/firebase-sa.json
+          firebase deploy --only hosting:jobs || true
+          rm -f /tmp/firebase-sa.json
 
       - name: Upload run logs
         if: always()
