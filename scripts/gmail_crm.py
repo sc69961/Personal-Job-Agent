@@ -72,7 +72,8 @@ _GENERIC_DOMAINS = {
     # These serve HUNDREDS of companies — matching on them causes cross-company
     # misattribution (e.g. Voltus emails hitting Omnidian via shared hire.lever.co).
     # Listed as root domains; the filter checks both exact match and subdomain suffix.
-    "greenhouse.io",       # boards.greenhouse.io, job-boards.greenhouse.io
+    "greenhouse.io",       # boards.greenhouse.io, job-boards.greenhouse.io, us.greenhouse-mail.io
+    "greenhouse-mail.io",  # us.greenhouse-mail.io — shared Greenhouse notification sender
     "lever.co",            # hire.lever.co, no-reply.lever.co
     "ashbyhq.com",         # jobs.ashbyhq.com
     "workday.com",         # wd1.myworkdayjobs.com, wd5.myworkdayjobs.com
@@ -374,8 +375,9 @@ If it IS job-related, return ONLY valid JSON (no markdown, no explanation):
   "applied_date": "<YYYY-MM-DD when application was sent, or empty string>",
   "status": "<Choose ONE — read carefully:
     applied = Steve submitted an application OR the only reply is an automated ATS confirmation. Auto-confirmations include: 'Thank you for applying', 'We received your application', 'Your application has been submitted', 'Application received', noreply/donotreply sender addresses, or any email that is clearly a templated system message. These are NOT human responses — keep status as 'applied'.
+    ALSO always use 'applied' (never upgrade status) for: Workday account creation / profile setup emails ('Create your candidate profile', 'Activate your Workday account', 'Verify your email', 'Complete your profile', 'Welcome to Workday', 'Your account has been created'), BambooHR scheduling notifications that are purely automated system emails, or any email asking Steve to log in to an ATS system for the first time. These look like progress but are just ATS onboarding — they are NOT human outreach.
     response_received = A REAL HUMAN at the company (recruiter, hiring manager) sent a personal reply that is NOT a template. The email must be clearly written for Steve specifically, not a form letter. Signs of a real human reply: personalized greeting, specific questions, scheduling language, signed with a person's name and title.
-    interview_requested = An actual interview, phone screen, or hiring-manager call was explicitly scheduled or requested by a human.
+    interview_requested = An actual interview, phone screen, or hiring-manager call was explicitly scheduled or requested by a human recruiter or hiring manager — NOT an automated ATS system. A Calendly link from a real person counts. An automated 'please log in to schedule' email does NOT count.
     rejected = Company says they are NOT moving forward. ANY of these phrases = rejected: 'not to advance', 'not moving forward', 'decided not to', 'not the right fit', 'after careful deliberation', 'not selected', 'moving in a different direction', 'will not be proceeding', 'pursuing other candidates'. Use rejected even if earlier emails showed an interview.
     offer = Company sent an ACTUAL FORMAL JOB OFFER with specific salary numbers, start date, or benefits package in THIS email thread. A job description mentioning a salary range is NOT an offer. 'Thank you for applying' is NOT an offer. An ATS confirmation email is NOT an offer. Only use 'offer' if the email text explicitly says something like 'we would like to offer you the position' or 'offer letter attached'.
     withdrawn = Steve withdrew his application.>",
@@ -808,6 +810,27 @@ def sync_gmail_crm(config: dict) -> dict:
                     app.setdefault("thread_ids", []).append(tid)
 
                 else:
+                    # Guard 1: skip if company name is blank — blank entries
+                    # are un-matchable noise (e.g. BambooHR notifications that
+                    # strip the company name from the email).
+                    if not company:
+                        logger.info(f"  Skipping thread {tid}: no company name extracted")
+                        seen_thread_ids.add(tid)
+                        continue
+
+                    # Guard 2: if the company is NOT in Steve's active applications
+                    # AND confidence is low, skip creating a new entry — it's almost
+                    # certainly a false positive (cross-company ATS email, spam, or
+                    # an email from a company Steve never applied to).
+                    known_companies = {a.get("company", "").lower() for a in crm["applications"]}
+                    if company.lower() not in known_companies and confidence < 70:
+                        logger.info(
+                            f"  Skipping thread {tid}: '{company}' not in active applications "
+                            f"and confidence {confidence} < 70 — likely false positive"
+                        )
+                        seen_thread_ids.add(tid)
+                        continue
+
                     aid = _app_id(company, job_title)
                     new_app = {
                         "id":                 aid,

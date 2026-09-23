@@ -75,10 +75,26 @@ jobs:
             echo "${{ secrets.GOOGLE_TOKEN_PICKLE }}" | base64 -d > config/google_token.pickle
           fi
 
+      # Skip the scheduled run if a manual (workflow_dispatch) run already
+      # committed data today. This prevents double-running when Steve triggers
+      # manually after the 5 AM scheduled run fires. Manual runs always proceed.
+      - name: Skip if already ran today (schedule only)
+        if: github.event_name == 'schedule'
+        id: skip_check
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          LAST=$(git log -1 --format="%as" -- output/first_seen_registry.json 2>/dev/null || echo "")
+          if [ "$LAST" = "$TODAY" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping: job agent already ran today ($TODAY via $LAST)"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       # Optional: re-queue jobs that previously failed due to API errors.
       # Removes their IDs from seen_ids.json in S3 so this run re-scores them.
       - name: Rescue API-error jobs (if requested)
-        if: ${{ github.event.inputs.rescue_errors == 'true' }}
+        if: ${{ github.event.inputs.rescue_errors == 'true' && steps.skip_check.outputs.skip != 'true' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -87,6 +103,7 @@ jobs:
         run: python scripts/rescue_scoring_errors.py
 
       - name: Run Job Agent
+        if: steps.skip_check.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -116,18 +133,18 @@ jobs:
       # Run even if the agent crashed — ensures Firebase and git always get the
       # latest data, and gives us a commit to inspect when debugging failures.
       - name: Persist data files to repo
-        if: always()
+        if: always() && steps.skip_check.outputs.skip != 'true'
         run: |
           bash scripts/git_safe_push.sh \
             "output/first_seen_registry.json output/rejected_jobs.json output/market_stats.json output/seen_job_ids.json output/crm.json" \
             "chore: update job agent data [skip ci]"
 
       - name: Install Firebase CLI
-        if: always()
+        if: always() && steps.skip_check.outputs.skip != 'true'
         run: npm install -g firebase-tools
 
       - name: Deploy to Firebase
-        if: always()
+        if: always() && steps.skip_check.outputs.skip != 'true'
         run: firebase deploy --only hosting:jobs --token "${{ secrets.FIREBASE_TOKEN }}" || true
 
       - name: Upload run logs
