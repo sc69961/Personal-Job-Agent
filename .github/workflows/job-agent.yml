@@ -25,6 +25,9 @@ concurrency:
   group: job-agent-main
   cancel-in-progress: false
 
+# Default: no permissions — jobs must explicitly request what they need.
+permissions: {}
+
 jobs:
   run-job-agent:
     runs-on: ubuntu-latest

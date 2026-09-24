@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+
+  # Keep Python packages up to date
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+    # Only flag security updates for pip — version bumps in AI/scraping
+    # libraries can break things; we want awareness, not auto-PRs for every patch.
+    open-pull-requests-limit: 5
