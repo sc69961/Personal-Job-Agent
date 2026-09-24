@@ -148,6 +148,41 @@ Product Toolkit: Agile/Scrum/SAFe, Jira, Confluence, Aha!, Figma, Tableau
 Technical: APIs (REST/GraphQL), SQL, Python, AI/ML (Gemini, Claude), Microservices, Cloud
 """
 
+# ---- SCORING RESUME (used by Claude for job scoring — scoring-optimized brief) ----
+# This is separate from RESUME_TEXT above. RESUME_TEXT is the human-readable version
+# for cover letters. SCORING_RESUME is calibrated for Claude: includes skill-gap warnings,
+# domain exclusions, and comp targets so scores are accurate and actionable.
+# Update this whenever your experience, gaps, or comp targets change.
+SCORING_RESUME = """
+Steve Christian | Senior Product Leader | Denver, CO (remote or Denver hybrid only)
+12+ years total PM experience (Accenture 2013+). ~4-5 years in energy as most recent chapter (Verizon 2021-2025). Prior chapters: fintech/payments (Airbnb, ~13 months) and enterprise/consumer platforms (Disney Parks, Accenture consulting).
+
+EXPERIENCE:
+Verizon (2021-2025): Incubated 5 x 0->1 products, secured $6M executive funding. Led AI-driven DER/VPP orchestration platform (demand response, grid-edge optimization). Patent: energy usage optimization. Python analytics dashboards.
+Accenture (2013-2020): Airbnb global payments platform ($10B+ annual volume, pre-IPO). Disney Parks app (1M+ downloads, 30K Cast Member platform). Fortune 100 consulting engagements.
+
+DOMAIN DEPTH: DER, DERMS, VPP, HEMS, grid modernization, demand response, V2G, IoT, residential electrification, smart home energy, fintech payments, enterprise SaaS, AI/ML products, data platforms.
+TECH: APIs (REST/GraphQL), Python (current), SQL (foundational — not independent querying), microservices, cloud, LLM-enabled products, Jira, Figma.
+APPROACH: Hypothesis-driven, JTBD methodology, systems thinking, comfortable with ambiguity, strong executive communication.
+
+CRITICAL — ENERGY EXPERTISE CONTEXT: Steve has ~4-5 years in energy as a SOFTWARE PRODUCT MANAGER building platforms for energy companies. He is NOT an energy developer, energy financier, power trader, or infrastructure investor. He has NEVER: negotiated PPAs or offtake agreements, managed EPC contractors, developed utility-scale generation projects, built technoeconomic models, structured project finance or infrastructure investments, or commercialized generation technologies. Roles requiring those skills are a POOR FIT.
+
+CRITICAL — NO DEEP SCIENTIFIC/TECHNICAL DOMAIN EXPERTISE: Steve does not have specialized expertise in: meteorology, atmospheric science, weather modeling (NWP, GNSS-RO, mesoscale), geospatial/remote sensing, genomics, materials science, semiconductor physics, or other hard science/engineering fields. Roles that require "8+ years in [scientific domain]" or "deep expertise in [scientific discipline]" as a hard requirement are a POOR FIT even if the PM function looks right. This includes: semiconductor/EE/ME/Physics degree required, RF/antenna engineering, hardware/chip design.
+
+CRITICAL — SKILL GAPS (score down when these are hard requirements):
+- SQL as primary data tool: Steve's SQL is foundational. Roles requiring "independent SQL querying without a data analyst" or "write complex queries daily" are a real gap. Python is the current tool.
+- Payments specialization: One ~13-month Airbnb role. Not 3+ years depth. ACH flows specifically confirmed; payments regulatory (MTL/PayFac), PSP vendor management, multi-rail expertise are gaps.
+- ISO/RTO dispatch or settlement system ownership: No direct ownership. The DER/VPP patent covers optimization logic but not direct market dispatch or settlement operations.
+- Energy regulatory expertise: No utility-sector regulatory or tariff experience. Do not conflate with general energy software experience.
+
+STRONG FIT: 0->1 ownership, platform/API products, AI-first orgs, energy/climate/utilities SOFTWARE companies, residential electrification software, high strategic ownership, product-led orgs, growth/monetization.
+MODERATE FIT: Enterprise SaaS, fintech, data platforms, digital transformation, customer data products with clear business-outcomes framing.
+NOT A FIT: Pure project/program management, feature delivery only, no strategic ownership, healthcare, pharma, telecom, mining. Also NOT a fit: energy project development, energy finance/commercialization, PPA/offtake negotiation, EPC management, utility-scale project development, technoeconomic modeling, infrastructure investment diligence, generation technology commercialization. Roles requiring deep scientific domain expertise (meteorology, atmospheric science, geospatial, genomics, semiconductor/EE, etc.).
+
+COMP TARGETS: Sr PM $180K-240K TC | Principal/Group PM $220K-325K TC | Director $275K-400K+ TC
+BASE FLOOR: ~$160K (flexible for strong energy/climate domain fit; less flexible for adjacent industries)
+""".strip()
+
 # ---- SCORING WEIGHTS (must sum to 1.0) ----
 # These tune how Claude calculates the final score
 SCORE_WEIGHTS = {

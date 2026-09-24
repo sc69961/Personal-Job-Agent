@@ -242,37 +242,6 @@ def _save_seen_ids(seen: set, path: str = _SEEN_IDS_PATH) -> None:
         logger.warning(f"Could not save seen_job_ids: {e}")
 
 
-CONDENSED_RESUME = """
-Steve Christian | Senior Product Leader | Denver, CO (remote or Denver hybrid only)
-12+ years total PM experience (Accenture 2013+). ~4-5 years in energy as most recent chapter (Verizon 2021-2025). Prior chapters: fintech/payments (Airbnb, ~13 months) and enterprise/consumer platforms (Disney Parks, Accenture consulting).
-
-EXPERIENCE:
-Verizon (2021-2025): Incubated 5 x 0->1 products, secured $6M executive funding. Led AI-driven DER/VPP orchestration platform (demand response, grid-edge optimization). Patent: energy usage optimization. Python analytics dashboards.
-Accenture (2013-2020): Airbnb global payments platform ($10B+ annual volume, pre-IPO). Disney Parks app (1M+ downloads, 30K Cast Member platform). Fortune 100 consulting engagements.
-
-DOMAIN DEPTH: DER, DERMS, VPP, HEMS, grid modernization, demand response, V2G, IoT, residential electrification, smart home energy, fintech payments, enterprise SaaS, AI/ML products, data platforms.
-TECH: APIs (REST/GraphQL), Python (current), SQL (foundational — not independent querying), microservices, cloud, LLM-enabled products, Jira, Figma.
-APPROACH: Hypothesis-driven, JTBD methodology, systems thinking, comfortable with ambiguity, strong executive communication.
-
-CRITICAL — ENERGY EXPERTISE CONTEXT: Steve has ~4-5 years in energy as a SOFTWARE PRODUCT MANAGER building platforms for energy companies. He is NOT an energy developer, energy financier, power trader, or infrastructure investor. He has NEVER: negotiated PPAs or offtake agreements, managed EPC contractors, developed utility-scale generation projects, built technoeconomic models, structured project finance or infrastructure investments, or commercialized generation technologies. Roles requiring those skills are a POOR FIT.
-
-CRITICAL — NO DEEP SCIENTIFIC/TECHNICAL DOMAIN EXPERTISE: Steve does not have specialized expertise in: meteorology, atmospheric science, weather modeling (NWP, GNSS-RO, mesoscale), geospatial/remote sensing, genomics, materials science, semiconductor physics, or other hard science/engineering fields. Roles that require "8+ years in [scientific domain]" or "deep expertise in [scientific discipline]" as a hard requirement are a POOR FIT even if the PM function looks right. This includes: semiconductor/EE/ME/Physics degree required, RF/antenna engineering, hardware/chip design.
-
-CRITICAL — SKILL GAPS (score down when these are hard requirements):
-- SQL as primary data tool: Steve's SQL is foundational. Roles requiring "independent SQL querying without a data analyst" or "write complex queries daily" are a real gap. Python is the current tool.
-- Payments specialization: One ~13-month Airbnb role. Not 3+ years depth. ACH flows specifically confirmed; payments regulatory (MTL/PayFac), PSP vendor management, multi-rail expertise are gaps.
-- ISO/RTO dispatch or settlement system ownership: No direct ownership. The DER/VPP patent covers optimization logic but not direct market dispatch or settlement operations.
-- Energy regulatory expertise: No utility-sector regulatory or tariff experience. Do not conflate with general energy software experience.
-
-STRONG FIT: 0->1 ownership, platform/API products, AI-first orgs, energy/climate/utilities SOFTWARE companies, residential electrification software, high strategic ownership, product-led orgs, growth/monetization.
-MODERATE FIT: Enterprise SaaS, fintech, data platforms, digital transformation, customer data products with clear business-outcomes framing.
-NOT A FIT: Pure project/program management, feature delivery only, no strategic ownership, healthcare, pharma, telecom, mining. Also NOT a fit: energy project development, energy finance/commercialization, PPA/offtake negotiation, EPC management, utility-scale project development, technoeconomic modeling, infrastructure investment diligence, generation technology commercialization. Roles requiring deep scientific domain expertise (meteorology, atmospheric science, geospatial, genomics, semiconductor/EE, etc.).
-
-COMP TARGETS: Sr PM $180K-240K TC | Principal/Group PM $220K-325K TC | Director $275K-400K+ TC
-BASE FLOOR: ~$160K (flexible for strong energy/climate domain fit; less flexible for adjacent industries)
-""".strip()
-
-
 def build_scoring_prompt(job: dict, resume: str, criteria: dict, positive_outcome_companies: list = None) -> str:
     positive_outcome_companies = positive_outcome_companies or []
     crm_signal = (
@@ -284,7 +253,7 @@ def build_scoring_prompt(job: dict, resume: str, criteria: dict, positive_outcom
     return f"""You are a job-fit analyst. Score this job posting for this candidate.
 
 === CANDIDATE SUMMARY ===
-{CONDENSED_RESUME}
+{resume}
 
 === JOB POSTING ===
 Title:       {job['title']}
@@ -302,7 +271,7 @@ Description:
 POSITIVE SIGNALS (add to score):
 - Energy/climate/DER/VPP/DERMS/grid company: +15 pts
 - Residential electrification / home energy management / smart home energy software: +10 pts (strong domain fit)
-- Target company list hit ({', '.join(criteria.get('target_companies', [])[:20])} and more): +10 pts
+- Target company list hit (pre-computed: {'YES — this company is on the target list, apply +10 pts' if job.get('_is_target_company') else 'No — not on target list'}): +10 pts
 - CRM proven fit — this company is in the CRM feedback list above (Steve got an interview or offer here): +8 pts
 - Strategic ownership language ("own product strategy", "define vision", "set roadmap", "drive business outcomes", "general manager mindset", "build from ambiguity", "executive communication", "portfolio ownership"): +10 pts
 - 0->1 / new product incubation: +8 pts
@@ -397,7 +366,8 @@ def score_job(
         "target_companies":    config.get("ALL_TARGET_COMPANIES", []),
     }
 
-    full_prompt = build_scoring_prompt(job, config["RESUME_TEXT"], criteria, positive_outcome_companies)
+    scoring_resume = config.get("SCORING_RESUME") or config.get("RESUME_TEXT", "")
+    full_prompt = build_scoring_prompt(job, scoring_resume, criteria, positive_outcome_companies)
 
     # ── Prompt caching ────────────────────────────────────────────────────
     # Split the prompt into: shared prefix (resume + criteria) and per-job suffix
@@ -584,10 +554,24 @@ def score_all_jobs(
         "negative_keywords":    config["NEGATIVE_KEYWORDS"],
         "target_companies":     config.get("ALL_TARGET_COMPANIES", []),
     }
+
+    # ── Pre-compute target company flag (Python set lookup, O(1)) ────────────
+    # This replaces the [:20]-truncated company list that was previously sent
+    # to Claude in the prompt. All 238+ companies are now checked in Python;
+    # Claude gets a clear YES/NO flag per job instead of a partial name list.
+    _target_set = {c.lower().strip() for c in config.get("ALL_TARGET_COMPANIES", [])}
+
+    # ── Build prompt cache prefix once for this run ──────────────────────────
+    # This is the portion of the prompt that is identical for every job: the
+    # resume, scoring criteria, and output schema. Passing it to score_job()
+    # lets the Anthropic SDK mark it cache_control="ephemeral" so subsequent
+    # jobs in this batch reuse it at 10% of normal input cost.
+    scoring_resume = config.get("SCORING_RESUME") or config.get("RESUME_TEXT", "")
     # Build a sentinel job to extract the invariant prefix
     _sentinel = {"title": "SENTINEL", "company": "SENTINEL", "location": "",
-                 "description": "", "salary_text": "", "source": "", "url": ""}
-    _full = build_scoring_prompt(_sentinel, config["RESUME_TEXT"], criteria, positive_outcome_companies)
+                 "description": "", "salary_text": "", "source": "", "url": "",
+                 "_is_target_company": False}
+    _full = build_scoring_prompt(_sentinel, scoring_resume, criteria, positive_outcome_companies)
     # The prefix ends right before "=== JOB POSTING ===" — everything before
     # that is the same for every job in this run.
     _split_marker = "=== JOB POSTING ==="
@@ -635,6 +619,9 @@ def score_all_jobs(
                 seen_ids.add(jid)
                 print(f"  [{i}/{total}] (filtered) {job['title']} @ {job['company']} — {reason}")
                 continue
+
+            # Stamp target-company flag before scoring (Python lookup covers all 238+ companies)
+            job["_is_target_company"] = job.get("company", "").lower().strip() in _target_set
 
             # Daily cap — stop sending new jobs to Claude once limit reached
             if new_count >= max_new:
