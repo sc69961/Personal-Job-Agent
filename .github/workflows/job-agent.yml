@@ -59,7 +59,7 @@ jobs:
       # always holds the most recent valid token — no manual Secret updates needed.
       - name: Restore state cache (output + OAuth token)
         id: restore-state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             output/
@@ -120,7 +120,7 @@ jobs:
       # Save state AFTER the run — token may have been refreshed by the agent
       - name: Save state cache (output + refreshed OAuth token)
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             output/
