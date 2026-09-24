@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload run logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: job-agent-logs-${{ github.run_id }}
           path: output/job_agent.log
