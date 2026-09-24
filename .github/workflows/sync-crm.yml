@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload CRM log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: crm-sync-logs-${{ github.run_id }}
           path: output/job_agent.log
